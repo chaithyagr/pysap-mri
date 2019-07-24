@@ -116,7 +116,8 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         metric_call_period=metric_call_period,
         metrics=metrics,
         linear=linear_op,
-        beta_param=gradient_op.inv_spec_rad)
+        beta_param=gradient_op.inv_spec_rad,
+        progress=False)
     cost_op = opt._cost_func
 
     # Perform the reconstruction
