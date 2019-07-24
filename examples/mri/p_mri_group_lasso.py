@@ -125,7 +125,7 @@ x_final, cost = sparse_rec_fista(
     max_nb_of_iter=max_iter,
     atol=1e-4,
     verbose=1,
-    cost_op='auto')
+    cost_op=None)
 
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
