@@ -22,13 +22,11 @@ import numpy
 from modopt.signal.wavelet import get_mr_filters, filter_convolve
 
 
-
 class Wavelet2(object):
     """ The 2D wavelet transform class.
     """
-    def __init__(self, wavelet_name, nb_scale=4, verbose=0, **kwargs):
+    def __init__(self, wavelet_name, nb_scale=4, verbose=0, multichannel=False):
         """ Initialize the 'Wavelet2' class.
-
         Parameters
         ----------
         wavelet_name: str
@@ -39,32 +37,24 @@ class Wavelet2(object):
             the verbosity level.
         """
         self.nb_scale = nb_scale
-        self.flatten = flatten
-        self.unflatten = unflatten
+        self.multichannel = multichannel
         if wavelet_name not in pysap.AVAILABLE_TRANSFORMS:
             raise ValueError(
                 "Unknown transformation '{0}'.".format(wavelet_name))
         transform_klass = pysap.load_transform(wavelet_name)
         self.transform = transform_klass(
-            nb_scale=self.nb_scale, verbose=verbose, **kwargs)
+            nb_scale=self.nb_scale, verbose=verbose)
         self.coeffs_shape = None
-
-    def get_coeff(self):
-        return self.transform.analysis_data
-
-    def set_coeff(self, coeffs):
-        self.transform.analysis_data = coeffs
+        self.flatten = flatten
+        self.unflatten = unflatten
 
     def op(self, data):
         """ Define the wavelet operator.
-
         This method returns the input data convolved with the wavelet filter.
-
         Parameters
         ----------
         data: ndarray or Image
             input 2D data array.
-
         Returns
         -------
         coeffs: ndarray
@@ -72,16 +62,25 @@ class Wavelet2(object):
         """
         if isinstance(data, numpy.ndarray):
             data = pysap.Image(data=data)
-        self.transform.data = data
-        self.transform.analysis()
-        coeffs, self.coeffs_shape = flatten(self.transform.analysis_data)
-        return coeffs
+        if self.multichannel:
+            coeffs = []
+            self.coeffs_shape = []
+            for channel in range(data.shape[0]):
+                self.transform.data = data[channel]
+                self.transform.analysis()
+                coeff, coeffs_shape = self.flatten(self.transform.analysis_data)
+                coeffs.append(coeff)
+                self.coeffs_shape.append(coeffs_shape)
+            return numpy.asarray(coeffs)
+        else:
+            self.transform.data = data
+            self.transform.analysis()
+            coeffs, self.coeffs_shape = self.flatten(self.transform.analysis_data)
+            return coeffs
 
     def adj_op(self, coeffs, dtype="array"):
         """ Define the wavelet adjoint operator.
-
         This method returns the reconsructed image.
-
         Parameters
         ----------
         coeffs: ndarray
@@ -89,26 +88,32 @@ class Wavelet2(object):
         dtype: str, default 'array'
             if 'array' return the data as a ndarray, otherwise return a
             pysap.Image.
-
         Returns
         -------
         data: ndarray
             the reconstructed data.
         """
-        self.transform.analysis_data = unflatten(coeffs, self.coeffs_shape)
-        image = self.transform.synthesis()
-        if dtype == "array":
-            return image.data
-        return image
+        if self.multichannel:
+            images = []
+            for channel, coeffs_shape in zip(range(coeffs.shape[0]),
+                                                   self.coeffs_shape):
+                self.transform.analysis_data = self.unflatten(coeffs[channel],
+                                                              coeffs_shape)
+                images.append(self.transform.synthesis().data)
+            return numpy.asarray(images)
+        else:
+            self.transform.analysis_data = self.unflatten(coeffs, self.coeffs_shape)
+            image = self.transform.synthesis()
+            if dtype == "array":
+                return image.data
+            return image
 
     def l2norm(self, shape):
         """ Compute the L2 norm.
-
         Parameters
         ----------
         shape: uplet
             the data shape.
-
         Returns
         -------
         norm: float
@@ -118,13 +123,14 @@ class Wavelet2(object):
         shape = numpy.asarray(shape)
         shape += shape % 2
         fake_data = numpy.zeros(shape)
-        fake_data[tuple(zip(shape // 2))] = 1
+        fake_data[list(zip(shape // 2))] = 1
 
         # Call mr_transform
         data = self.op(fake_data)
 
         # Compute the L2 norm
         return numpy.linalg.norm(data)
+
 
 class WaveletUD2(object):
     """The wavelet undecimated operator using pysap wrapper.
@@ -236,3 +242,4 @@ class WaveletUD2(object):
 
         # Compute the L2 norm
         return numpy.linalg.norm(data)
+
