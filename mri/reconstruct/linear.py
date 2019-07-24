@@ -19,6 +19,8 @@ from pysap.base.utils import unflatten
 
 # Third party import
 import numpy
+from modopt.signal.wavelet import get_mr_filters, filter_convolve
+
 
 
 class Wavelet2(object):
@@ -107,6 +109,117 @@ class Wavelet2(object):
         shape: uplet
             the data shape.
 
+        Returns
+        -------
+        norm: float
+            the L2 norm.
+        """
+        # Create fake data
+        shape = numpy.asarray(shape)
+        shape += shape % 2
+        fake_data = numpy.zeros(shape)
+        fake_data[tuple(zip(shape // 2))] = 1
+
+        # Call mr_transform
+        data = self.op(fake_data)
+
+        # Compute the L2 norm
+        return numpy.linalg.norm(data)
+
+class WaveletUD2(object):
+    """The wavelet undecimated operator using pysap wrapper.
+    """
+
+    def __init__(self, wavelet_id, nb_scale=4):
+        """Init function for Undecimated wavelet transform
+
+        Parameters
+        -----------
+        wavelet_id: str
+            ID of wavelet being used
+        nb_scale: int, default 4
+            the number of scales in the decomposition.
+
+        Private Variables:
+            _has_run: Checks if the get_mr_filters was called already
+        """
+        self.wavelet_id = wavelet_id
+        self.nb_scale = nb_scale
+        self._opt = [
+            '-t{}'.format(self.wavelet_id),
+            '-n{}'.format(self.nb_scale),
+        ]
+        self._has_run = False
+        self._shape = (None,)
+
+    def _get_filters(self, shape):
+        """ Function to get the Wavelet coefficients of Delta[0][0]. This function is called only once and later the
+        wavelet coefficients are obtained by convolving these coefficients with input Data
+        """
+        self.filters = get_mr_filters(
+            tuple(shape),
+            opt=self._opt,
+            coarse=True,
+        )
+        self._has_run = True
+        self._shape = shape
+
+    def op(self, data):
+        """ Define the wavelet operator.
+
+        This method returns the input data convolved with the wavelet filter.
+
+        Parameters
+        ----------
+        data: ndarray or Image
+            input 2D data array.
+
+        Returns
+        -------
+        coeffs: ndarray
+            the wavelet coefficients.
+        """
+        if not self._has_run or data.shape != self._shape:
+            self._get_filters(data.shape)
+        coefs_real = filter_convolve(data.real, self.filters)
+        coefs_imag = filter_convolve(data.imag, self.filters)
+        # NOTE : if we need to flatten the coefs we will do it here
+        return coefs_real + 1j * coefs_imag
+
+    def adj_op(self, coefs):
+        """ Define the wavelet adjoint operator.
+
+        This method returns the reconsructed image.
+
+        Parameters
+        ----------
+        coeffs: ndarray
+            the wavelet coefficients.
+        dtype: str, default 'array'
+            if 'array' return the data as a ndarray, otherwise return a
+            pysap.Image.
+
+        Returns
+        -------
+        data: ndarray
+            the reconstructed data.
+        """
+        if not self._has_run:
+            raise RuntimeError(
+                "`op` must be run before `adj_op` to get the data shape",
+            )
+        data_real = filter_convolve(coefs.real, self.filters, filter_rot=True)
+        data_imag = filter_convolve(coefs.imag, self.filters, filter_rot=True)
+        # NOTE : if we need to flatten the coefs we will need to unflatten
+        # them before
+        return data_real + 1j * data_imag
+
+    def l2norm(self, shape):
+        """ Compute the L2 norm.
+        Parameters
+        ----------
+        shape: uplet
+            the data shape.
         Returns
         -------
         norm: float
