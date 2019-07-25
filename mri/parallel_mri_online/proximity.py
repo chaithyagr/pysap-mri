@@ -14,23 +14,20 @@ Overload the proximity class from modopt.
 import numpy as np
 import warnings
 from modopt.opt.proximity import SparseThreshold
-from pysap.plugins.mri.parallel_mri_online.utils import extract_patches_2d
-from pysap.plugins.mri.parallel_mri_online.utils import \
-                                    reconstruct_non_overlapped_patches_2d
-from pysap.plugins.mri.parallel_mri_online.utils import \
-                                    reconstruct_overlapped_patches_2d
-from pysap.plugins.mri.parallel_mri_online.linear import Identity
+from mri.parallel_mri_online.utils import extract_patches_2d
+from mri.parallel_mri_online.utils import \
+                      reconstruct_non_overlapped_patches_2d
+from mri.parallel_mri_online.utils import \
+                      reconstruct_overlapped_patches_2d
+from mri.parallel_mri_online.linear import Identity
 from joblib import Parallel, delayed
-from pysap.plugins.mri.parallel_mri_online.utils import \
-                                    _oscar_weights
+from mri.parallel_mri_online.utils import _oscar_weights
 from sklearn.isotonic import isotonic_regression
 
 
 class ElasticNet(object):
     """The proximity of the lasso regularisation
-
     This class defines the group-lasso penalization
-
     Parameters
     ----------
     weights : np.ndarray
@@ -49,49 +46,40 @@ class ElasticNet(object):
 
     def op(self, data, extra_factor=1.0):
         """ Operator
-
         This method returns the input data thresholded by the weights
-
         Parameters
         ----------
         data : DictionaryBase
             Input data array
         extra_factor : float
             Additional multiplication factor
-
         Returns
         -------
         DictionaryBase thresholded data
-
         """
         return np.reshape((1.0/(1 + self.weights_lasso*2*self.weights_ridge)) *
                           self.prox_op._op_method(data.flatten(),
                                                   extra_factor),
                           data.shape)
 
-    def get_cost(self, data):
+    def cost(self, data):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
         """
         return self.weights_lasso * np.sum(np.abs(data.flatten())) + \
-            self.weights_ridge * np.sqrt(np.sum(np.abs(data.flatten())**2))
-
+               self.weights_ridge * np.sqrt(np.sum(np.abs(data.flatten())**2))
 
 class NuclearNorm(object):
     """The proximity of the nuclear norm operator
-
     This class defines the nuclear norm proximity operator on a patch based
     method
-
     Parameters
     ----------
     weights : np.ndarray
@@ -105,14 +93,14 @@ class NuclearNorm(object):
         if = 2,means 2 patches overlaps
     """
     def __init__(self, weights, patch_shape, overlapping_factor=1,
-                 num_cores=1, mode="image", linear_op=None):
+                num_cores=1, mode="image", linear_op=None):
         """
         Parameters:
         -----------
         """
-        if mode not in ["image", "sparse"]:
+        if not mode in ["image", "sparse"]:
             raise ValueError('The specified mode should be either image or',
-                             'sparse coefficients')
+                              'sparse coefficients')
         self.mode = mode
         if mode == "sparse" and linear_op is None:
             raise ValueError("The linear operator should be specified for the",
@@ -147,20 +135,16 @@ class NuclearNorm(object):
 
     def op(self, data, extra_factor=1.0):
         """ Operator
-
         This method returns the input data thresholded by the weights
-
         Parameters
         ----------
         data : DictionaryBase
             Input data array
         extra_factor : float
             Additional multiplication factor
-
         Returns
         -------
         DictionaryBase thresholded data
-
         """
         threshold = self.weights * extra_factor
         if self.mode == "image":
@@ -172,20 +156,19 @@ class NuclearNorm(object):
                     threshold=threshold)
                 return np.moveaxis(images, -1, 0)
             elif self.overlapping_factor == 1:
-                P = extract_patches_2d(
-                    np.moveaxis(data, 0, -1),
-                    self.patch_shape,
-                    overlapping_factor=self.overlapping_factor)
+                P = extract_patches_2d(np.moveaxis(data, 0, -1),
+                                       self.patch_shape,
+                                       overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
-                if self.num_cores == 1:
+                if self.num_cores==1:
                     for idx in range(number_of_patches):
                         P[idx, :, :, :] = self._prox_nuclear_norm(
-                            patch=P[idx, :, :, :],
-                            threshold=threshold)
+                            patch=P[idx, :, :, :,],
+                            threshold = threshold)
                 else:
                     P = Parallel(n_jobs=self.num_cores)(delayed(
                         self._prox_nuclear_norm)(
-                                    patch=P[idx, :, :, :],
+                                    patch=P[idx, : ,: ,:],
                                     threshold=threshold)
                                     for idx in range(number_of_patches))
                 output = reconstruct_non_overlapped_patches_2d(
@@ -193,15 +176,13 @@ class NuclearNorm(object):
                                                     img_size=data.shape[1:])
                 return output
             else:
-                P = extract_patches_2d(
-                    np.moveaxis(data, 0, -1),
-                    self.patch_shape,
-                    overlapping_factor=self.overlapping_factor)
+                P = extract_patches_2d(np.moveaxis(data, 0, -1), self.patch_shape,
+                                       overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
                 threshold = self.weights * extra_factor
-                extraction_step_size = [int(P_shape/self.overlapping_factor)
-                                        for P_shape in self.patch_shape]
-                if self.num_cores == 1:
+                extraction_step_size=[int(P_shape/self.overlapping_factor) for P_shape
+                                      in self.patch_shape]
+                if self.num_cores==1:
                     for idx in range(number_of_patches):
                         P[idx, :, :, :] = self._prox_nuclear_norm(
                             patch=P[idx, :, :, :],
@@ -218,7 +199,7 @@ class NuclearNorm(object):
                     extraction_step_size=extraction_step_size)
                 return np.moveaxis(image, -1, 0)
         elif self.mode == 'sparse':
-            # have to do something
+            #have to do something
             coeffs = [self.linear_op.unflatten(
                       data[ch],
                       self.linear_op.coeffs_shape[ch])
@@ -248,12 +229,10 @@ class NuclearNorm(object):
     def cost(self, data, extra_factor=1.0):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
@@ -266,10 +245,9 @@ class NuclearNorm(object):
                     np.moveaxis(data, 0, -1),
                     (np.prod(self.patch_shape), data.shape[0])))
             elif self.overlapping_factor == 1:
-                P = extract_patches_2d(
-                    np.moveaxis(data, 0, -1),
-                    self.patch_shape,
-                    overlapping_factor=self.overlapping_factor)
+                P = extract_patches_2d(np.moveaxis(data, 0, -1),
+                                       self.patch_shape,
+                                       overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
                 cost_list = Parallel(n_jobs=self.num_cores)(delayed(
                     self._cost_nuclear_norm)(
@@ -277,10 +255,8 @@ class NuclearNorm(object):
                         ) for idx in range(number_of_patches))
                 cost = np.asarray(cost_list).sum()
             else:
-                P = extract_patches_2d(
-                    np.moveaxis(data, 0, -1),
-                    self.patch_shape,
-                    overlapping_factor=self.overlapping_factor)
+                P = extract_patches_2d(np.moveaxis(data, 0, -1), self.patch_shape,
+                                       overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
                 threshold = self.weights * extra_factor
                 cost_list = Parallel(n_jobs=self.num_cores)(delayed(
@@ -310,9 +286,7 @@ class NuclearNorm(object):
 
 class GroupLasso(object):
     """The proximity of the group-lasso regularisation
-
     This class defines the group-lasso penalization
-
     Parameters
     ----------
     weights : np.ndarray
@@ -327,46 +301,38 @@ class GroupLasso(object):
 
     def op(self, data, extra_factor=1.0):
         """ Operator
-
         This method returns the input data thresholded by the weights
-
         Parameters
         ----------
         data : DictionaryBase
             Input data array
         extra_factor : float
             Additional multiplication factor
-
         Returns
         -------
         DictionaryBase thresholded data
-
         """
         norm_2 = np.linalg.norm(data, axis=0)
         return data * np.maximum(0, 1.0 - self.weights*extra_factor /
                                  np.maximum(norm_2, np.finfo(np.float32).eps))
 
-    def get_cost(self, data):
+    def cost(self, data):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
         """
-        return np.sum(self.weights * np.linalg.norm(data, axis=0))
+        return np.sum(np.linalg.norm(data, axis=0))
 
 
 class SparseGroupLasso(SparseThreshold, GroupLasso):
     """The proximity of the sparse group-lasso regularisation
-
     This class defines the sparse group-lasso penalization
-
     Parameters
     ----------
     weights : np.ndarray
@@ -386,36 +352,30 @@ class SparseGroupLasso(SparseThreshold, GroupLasso):
 
     def op(self, data, extra_factor=1.0):
         """ Operator
-
         This method returns the input data thresholded by the weights
-
         Parameters
         ----------
         data : DictionaryBase
             Input data array
         extra_factor : float
             Additional multiplication factor
-
         Returns
         -------
         DictionaryBase thresholded data
-
         """
 
         return self.prox_op_l2.op(self.prox_op_l1.op(
-                                  data,
-                                  extra_factor=extra_factor),
-                                  extra_factor=extra_factor)
+                                    data,
+                                    extra_factor=extra_factor),
+                                    extra_factor=extra_factor)
 
-    def get_cost(self, data):
+    def cost(self, data):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
@@ -440,49 +400,37 @@ class OWL(object):
         self.weights = alpha
         self.mode = mode
         self.num_cores = num_cores
-        if n_channel < 1:
-            raise ValueError('Number of channels must be strictly positive')
         if beta is not None:
             print("Uses OSCAR: Octogonal Shrinkage and Clustering Algorithm"
                   " for Regression")
             if bands_shape is None:
                 raise('Data size must be specified if OSCAR is used')
             else:
-                if self.mode == 'all':
-                    data_shape = bands_shape
+                if self.mode is 'all':
+                    data_shape = 0
+                    if n_channel > 1:
+                        for band_shape in bands_shape[0]:
+                            data_shape += np.prod(band_shape)
+                    elif n_channel == 1:
+                        for band_shape in bands_shape:
+                            data_shape += np.prod(band_shape)
                     self.weights = np.reshape(_oscar_weights(alpha, beta,
                                                   data_shape * n_channel), (n_channel, data_shape))
-                elif self.mode == 'band_based':
+                elif self.mode is 'band_based':
+                    if n_channel > 1:
+                        self.band_shape = bands_shape[0]
+                    elif n_channel == 1:
+                        self.band_shape = bands_shape
+                    else:
+                        raise ValueError('Number of channels must be strictly positive')
                     self.weights = []
-                    self.band_shape = []
-                    for band_shape in bands_shape:
-                        if type(band_shape) is tuple:
-                            self.band_shape.append(band_shape)
-                            self.weights.append(_oscar_weights(
-                                alpha, beta, np.prod(band_shape)))
-                        elif type(band_shape) is list:
-                            for sub_band_name, sub_band_shape in band_shape:
-                                self.band_shape.append(sub_band_shape)
-                                self.weights.append(_oscar_weights(
-                                    alpha, beta, np.prod(sub_band_shape)))
-                elif self.mode == 'scale_based':
-                    self.weights = []
-                    self.scale_shape = []
-                    tmp_scale_coarse = 0
-                    for band_shape in bands_shape:
-                        tmp_scale = 0
-                        if type(band_shape) is tuple:
-                            tmp_scale_coarse = np.prod(band_shape)
-                        elif type(band_shape) is list:
-                            for sub_band_name, sub_band_shape in band_shape:
-                                tmp_scale += np.prod(sub_band_shape) + tmp_scale_coarse
-                                tmp_scale_coarse = 0
-                            self.scale_shape.append(tmp_scale)
-                            self.weights.append(_oscar_weights(alpha, beta, tmp_scale))
-                elif self.mode == 'coeff_based':
+                    for band_shape in self.band_shape:
+                        self.weights.append(_oscar_weights(
+                            alpha, beta, n_channel * np.prod(band_shape)))
+                elif self.mode is 'coeff_based':
                     self.weights = _oscar_weights(alpha, beta, n_channel)
                 else:
-                    raise AttributeError("Unknow mode, please choose between: 'all', 'band_based' and 'coeff_based'")
+                    raise('Unknow mode')
 
     def _prox_owl(self, data, threshold):
         data_abs = np.abs(data)
@@ -502,23 +450,12 @@ class OWL(object):
 
         return sign_data * data_abs
 
-    def _reshape_mode_band(self, data):
+    def _reshape_mode_based(self, data):
         output = []
         start = 0
         n_channel = data.shape[0]
         for band_shape_idx in self.band_shape:
-            n_coeffs = int(np.prod(band_shape_idx)/n_channel)
-            stop = start + n_coeffs
-            output.append(np.reshape(data[:, start: stop], (n_channel*n_coeffs)))
-            start = stop
-        return output
-
-    def _reshape_mode_scale(self, data):
-        output = []
-        start = 0
-        n_channel = data.shape[0]
-        for scale_shape_idx in self.scale_shape:
-            n_coeffs = int(scale_shape_idx/n_channel)
+            n_coeffs = np.prod(band_shape_idx)
             stop = start + n_coeffs
             output.append(np.reshape(data[:, start: stop], (n_channel*n_coeffs)))
             start = stop
@@ -528,13 +465,13 @@ class OWL(object):
         """
         Define the proximity operator of the OWL norm
         """
-        if self.mode == 'all':
+        if self.mode is 'all':
             threshold = self.weights.flatten() * extra_factor
             output = np.reshape(self._prox_owl(data.flatten(), threshold),
                                 data.shape)
             return output
-        elif self.mode == 'band_based':
-            data_r = self._reshape_mode_band(data)
+        elif self.mode is 'band_based':
+            data_r = self._reshape_mode_based(data)
             output = []
             output = Parallel(n_jobs=self.num_cores)(delayed(self._prox_owl)(
                         data=data_band,
@@ -545,86 +482,35 @@ class OWL(object):
             n_channel = data.shape[0]
 
             for band_shape_idx, band_data in zip(self.band_shape, output):
-                step = int(np.prod(band_shape_idx) / n_channel)
-                stop = start + step
-                reshaped_data[:, start : stop] = np.reshape(band_data, (n_channel, step))
+                stop = start + np.prod(band_shape_idx)
+                reshaped_data[:, start : stop] = np.reshape(band_data, (n_channel, np.prod(band_shape_idx)))
                 start = stop
             output = np.asarray(reshaped_data).T
-
-        elif self.mode == 'scale_based':
-            data_r = self._reshape_mode_scale(data)
-            output = []
-            output = Parallel(n_jobs=self.num_cores)(delayed(self._prox_owl)(
-                        data=data_band,
-                        threshold=weights * extra_factor)
-                        for data_band, weights in zip(data_r, self.weights))
-            reshaped_data = np.zeros(data.shape, dtype=data.dtype)
-            start = 0
-            n_channel = data.shape[0]
-
-            for band_shape_idx, band_data in zip(self.scale_shape, output):
-                step = int(np.prod(band_shape_idx) / n_channel)
-                stop = start + step
-                reshaped_data[:, start : stop] = np.reshape(band_data, (n_channel, step))
-                start = stop
-            output = np.asarray(reshaped_data).T
-        elif self.mode == 'coeff_based':
+        elif self.mode is 'coeff_based':
             threshold = self.weights * extra_factor
             output = Parallel(n_jobs=self.num_cores)(delayed(self._prox_owl)(
                         data=np.squeeze(data[:, idx]),
                         threshold=threshold) for idx in range(data.shape[1]))
         return np.asarray(output).T
 
-    def _cost(sel, weights, data):
-        """Implement the basic cost function of OWL
-        Return sum(sorted(weights) * sorted(abs(data)))
-        """
-        return np.sum(np.sort(np.abs(weights.flatten())) *
-                      np.sort(np.abs(data.flatten())))
-
     def cost(self, data):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
         """
-        if self.mode == 'all':
-            return self._cost(self.weights, data.flatten())
-        elif self.mode == 'band_based':
-            data_r = self._reshape_mode_band(data)
-            output = []
-            output = Parallel(n_jobs=self.num_cores)(delayed(self._cost)(
-                        data=data_band,
-                        weights=weights)
-                        for data_band, weights in zip(data_r, self.weights))
-            return np.sum(np.asarray(output))
-        elif self.mode == 'scale_based':
-            data_r = self._reshape_mode_scale(data)
-            output = []
-            output = Parallel(n_jobs=self.num_cores)(delayed(self._cost)(
-                        data=data_band,
-                        weights=weights)
-                        for data_band, weights in zip(data_r, self.weights))
-            return np.sum(np.asarray(output))
-        elif self.mode == 'coeff_based':
-            output = Parallel(n_jobs=self.num_cores)(delayed(self._cost)(
-                        data=np.squeeze(data[:, idx]),
-                        weights=self.weights) for idx in range(data.shape[1]))
-            return np.sum(np.asarray(output))
+        warnings.warn('Cost function not implemented yet', UserWarning)
+        return 0
 
 
 class k_support_norm(object):
     """The proximity of the squarre k-support norm regularisation
-
     This class defines the squarre of k-support norm regularization
-
     Parameters
     ----------
         weights: np.ndarray or float
@@ -687,7 +573,6 @@ class k_support_norm(object):
         """ Linear interpolation of alpha
         This method estimate alpha* such that sum(theta(alpha*))=k via a linear
         interpolation.
-
         Parameters:
         -----------
         alpha_0: float
@@ -698,7 +583,6 @@ class k_support_norm(object):
             Value of sum(theta(alpha_0))
         sum_1:
             Value of sum(theta(alpha_0))
-
         Return:
         -------
         alpha_star: float
@@ -719,7 +603,6 @@ class k_support_norm(object):
         This method finds i the coordinate of alpha such that
         sum(theta(alpha[i])) =<k and sum(theta(alpha[i+1]))>=k via binary
         search method
-
         Parameters:
         -----------
         data_abs: np.ndarray
@@ -807,14 +690,12 @@ class k_support_norm(object):
     def _find_alpha(self, w, extra_factor=1.0):
         """ Find alpha value to compute theta.
         This method aim at finding alpha such that sum(theta(alpha)) = k
-
         Parameters:
         -----------
         w: np.ndarray
             Input data
         extra_factor: float
             Potential extra factor for the weights
-
         Return:
         -------
             alpha: float
@@ -834,7 +715,6 @@ class k_support_norm(object):
         """
         Define the proximity operator of the k-support norm
         from Algorithm1 http://jmlr.org/papers/v17/15-151.html
-
         """
         data_shape = data.shape
         alpha = self._find_alpha(np.abs(data.flatten()), extra_factor)
@@ -885,15 +765,13 @@ class k_support_norm(object):
                     first_idx = q
         return q
 
-    def get_cost(self, data):
+    def cost(self, data):
         """Cost function
         This method calculate the cost function of the proximable part.
-
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
-
         Returns
         -------
         The cost of this sparse code
@@ -904,3 +782,4 @@ class k_support_norm(object):
         q = self._find_q(data_abs)
         rslt = np.sum(data_abs[:q]**2) + data_abs[q+1:].sum() / (self.k - q)
         return rslt
+

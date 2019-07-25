@@ -18,7 +18,7 @@ from pysap.base.utils import flatten
 from pysap.base.utils import unflatten
 
 # Third party import
-import numpy
+import numpy as np
 from modopt.signal.wavelet import get_mr_filters, filter_convolve
 
 
@@ -60,7 +60,7 @@ class Wavelet2(object):
         coeffs: ndarray
             the wavelet coefficients.
         """
-        if isinstance(data, numpy.ndarray):
+        if isinstance(data, np.ndarray):
             data = pysap.Image(data=data)
         if self.multichannel:
             coeffs = []
@@ -71,7 +71,7 @@ class Wavelet2(object):
                 coeff, coeffs_shape = self.flatten(self.transform.analysis_data)
                 coeffs.append(coeff)
                 self.coeffs_shape.append(coeffs_shape)
-            return numpy.asarray(coeffs)
+            return np.asarray(coeffs)
         else:
             self.transform.data = data
             self.transform.analysis()
@@ -100,7 +100,7 @@ class Wavelet2(object):
                 self.transform.analysis_data = self.unflatten(coeffs[channel],
                                                               coeffs_shape)
                 images.append(self.transform.synthesis().data)
-            return numpy.asarray(images)
+            return np.asarray(images)
         else:
             self.transform.analysis_data = self.unflatten(coeffs, self.coeffs_shape)
             image = self.transform.synthesis()
@@ -120,28 +120,28 @@ class Wavelet2(object):
             the L2 norm.
         """
         # Create fake data
-        shape = numpy.asarray(shape)
+        shape = np.asarray(shape)
         shape += shape % 2
-        fake_data = numpy.zeros(shape)
+        fake_data = np.zeros(shape)
         fake_data[list(zip(shape // 2))] = 1
 
         # Call mr_transform
         data = self.op(fake_data)
 
         # Compute the L2 norm
-        return numpy.linalg.norm(data)
+        return np.linalg.norm(data)
 
 
 class WaveletUD2(object):
     """The wavelet undecimated operator using pysap wrapper.
     """
 
-    def __init__(self, wavelet_id, nb_scale=4):
+    def __init__(self, wavelet_id, nb_scale=4, verbose=0, multichannel=False):
         """Init function for Undecimated wavelet transform
 
         Parameters
         -----------
-        wavelet_id: str
+        wavelet_id: int
             ID of wavelet being used
         nb_scale: int, default 4
             the number of scales in the decomposition.
@@ -150,6 +150,7 @@ class WaveletUD2(object):
             _has_run: Checks if the get_mr_filters was called already
         """
         self.wavelet_id = wavelet_id
+        self.multichannel = multichannel
         self.nb_scale = nb_scale
         self._opt = [
             '-t{}'.format(self.wavelet_id),
@@ -162,7 +163,7 @@ class WaveletUD2(object):
         """ Function to get the Wavelet coefficients of Delta[0][0]. This function is called only once and later the
         wavelet coefficients are obtained by convolving these coefficients with input Data
         """
-        self.filters = get_mr_filters(
+        self.transform = get_mr_filters(
             tuple(shape),
             opt=self._opt,
             coarse=True,
@@ -186,10 +187,18 @@ class WaveletUD2(object):
             the wavelet coefficients.
         """
         if not self._has_run or data.shape != self._shape:
-            self._get_filters(data.shape)
-        coefs_real = filter_convolve(data.real, self.filters)
-        coefs_imag = filter_convolve(data.imag, self.filters)
-        # NOTE : if we need to flatten the coefs we will do it here
+            if self.multichannel:
+                self._get_filters(list(data.shape)[1:])
+            else:
+                self._get_filters(data.shape)
+        if self.multichannel:
+            coefs_real = np.array([filter_convolve(data[channel].real, self.transform)
+                                   for channel in np.arange(data.shape[0])])
+            coefs_imag = np.array([filter_convolve(data[channel].real, self.transform)
+                                   for channel in np.arange(data.shape[0])])
+        else:
+            coefs_real = filter_convolve(data.real, self.transform)
+            coefs_imag = filter_convolve(data.imag, self.transform)
         return coefs_real + 1j * coefs_imag
 
     def adj_op(self, coefs):
@@ -214,10 +223,14 @@ class WaveletUD2(object):
             raise RuntimeError(
                 "`op` must be run before `adj_op` to get the data shape",
             )
-        data_real = filter_convolve(coefs.real, self.filters, filter_rot=True)
-        data_imag = filter_convolve(coefs.imag, self.filters, filter_rot=True)
-        # NOTE : if we need to flatten the coefs we will need to unflatten
-        # them before
+        if self.multichannel:
+            data_real = np.array([filter_convolve(coefs.real[channel], self.transform, filter_rot=True)
+                                  for channel in np.arange(coefs.imag.shape[0])])
+            data_imag = np.array([filter_convolve(coefs.imag[channel], self.transform, filter_rot=True)
+                                  for channel in np.arange(coefs.imag.shape[0])])
+        else:
+            data_real = filter_convolve(coefs.real, self.transform, filter_rot=True)
+            data_imag = filter_convolve(coefs.imag, self.transform, filter_rot=True)
         return data_real + 1j * data_imag
 
     def l2norm(self, shape):
@@ -232,14 +245,14 @@ class WaveletUD2(object):
             the L2 norm.
         """
         # Create fake data
-        shape = numpy.asarray(shape)
+        shape = np.asarray(shape)
         shape += shape % 2
-        fake_data = numpy.zeros(shape)
+        fake_data = np.zeros(shape)
         fake_data[tuple(zip(shape // 2))] = 1
 
         # Call mr_transform
         data = self.op(fake_data)
 
         # Compute the L2 norm
-        return numpy.linalg.norm(data)
+        return np.linalg.norm(data)
 

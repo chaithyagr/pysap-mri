@@ -18,7 +18,8 @@ We also add some gaussian noise in the image space.
 # Package import
 import pysap
 from pysap.data import get_sample_data
-from mri.reconstruct.linear import Wavelet2
+import mri.reconstruct.linear as linear_operators
+from modopt.opt.cost import costObj
 from mri.reconstruct.fourier import FFT2
 from mri.reconstruct.fourier import NFFT
 from mri.parallel_mri_online.gradient import Grad2D_pMRI
@@ -26,7 +27,7 @@ from mri.parallel_mri_online.proximity import GroupLasso
 from mri.reconstruct.utils import convert_mask_to_locations
 from mri.numerics.reconstruct import sparse_rec_fista
 from mri.numerics.reconstruct import sparse_rec_condatvu
-
+from mri.parallel_mri_online.proximity import OWL
 
 # Third party import
 import numpy as np
@@ -34,18 +35,21 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
 # Loading input data
-'''image_name = '/volatile/data/2017-05-30_32ch/'\
-            '/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
+'''
+image_name = '/home/chaithyagr/Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
 k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 '''
-image_name = '/home/chaithyagr/Downloads/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
+image_name = '/home/chaithyagr/Data/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
 k_space_ref = np.load(image_name)
     #loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 k_space_ref = np.transpose(k_space_ref)
 
+
 cartesian_reconstruction = True
+decimated = False
+isGLprox = True
 
 if cartesian_reconstruction:
     Sl = np.zeros((32, 512, 512), dtype='complex128')
@@ -65,7 +69,6 @@ mask = get_sample_data("mri-mask")
 # mask.show()
 image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
 # image.show()
-
 #############################################################################
 # Generate the kspace
 # -------------------
@@ -76,11 +79,11 @@ image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
 
 # Generate the subsampled kspace
 if cartesian_reconstruction:
-    mask.data = np.fft.fftshift(mask.data)
+    #mask.data = np.fft.fftshift(mask.data)
     kspace_loc = convert_mask_to_locations(mask.data)
     kspace_data = []
     [kspace_data.append(mask.data * np.fft.fft2(Sl[channel]))
-        for channel in range(Sl.shape[0])]
+     for channel in range(Sl.shape[0])]
 else:
     kspace_loc = convert_mask_to_locations(mask.data)
     fourier_op_1 = NFFT(samples=kspace_loc, shape=image.shape)
@@ -102,11 +105,13 @@ kspace_data = np.asarray(kspace_data)
 # import ipdb; ipdb.set_trace()
 max_iter = 10
 
-linear_op = Wavelet2(wavelet_name="UndecimatedBiOrthogonalTransform",
-                     nb_scale=4, multichannel=True)
+if decimated:
+    linear_op = linear_operators.Wavelet2(wavelet_name='db4', nb_scale=4, multichannel=True)
+else:
+    linear_op = linear_operators.WaveletUD2(wavelet_id=24, nb_scale=4, multichannel=True)
 
 if cartesian_reconstruction:
-    fourier_op = FFT2(samples=kspace_loc, shape=(512,512))
+    fourier_op = FFT2(samples=kspace_loc, shape=(512, 512))
 else:
     fourier_op = NFFT(samples=kspace_loc, shape=(512, 512))
 
@@ -114,38 +119,46 @@ else:
 gradient_op_cd = Grad2D_pMRI(data=kspace_data,
                              fourier_op=fourier_op,
                              linear_op=linear_op)
-
 mu_value = 1e-7
-prox_op = GroupLasso(mu_value)
-x_final, cost = sparse_rec_fista(
-    gradient_op=gradient_op_cd,
-    linear_op=linear_op,
-    prox_op=prox_op,
-    lambda_init=1.0,
-    max_nb_of_iter=max_iter,
-    atol=1e-4,
-    verbose=1,
-    cost_op=None)
+if isGLprox:
+    prox_op = GroupLasso(mu_value)
+else:
+    beta = 1e-15
+    prox_op = OWL(mu_value,
+                  beta,
+                  mode='band_based',
+                  bands_shape=linear_op.coeffs_shape,
+                  n_channel=32)
 
-image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-image_rec.show()
-plt.plot(cost)
-plt.show()
+# x_final, transform, cost, metrics = sparse_rec_fista(
+#     gradient_op=gradient_op_cd,
+#     linear_op=linear_op,
+#     prox_op=prox_op,
+#     cost_op=costObj([gradient_op_cd, prox_op]),
+#     lambda_init=1.0,
+#     max_nb_of_iter=max_iter,
+#     atol=1e-4,
+#     verbose=1)
+#
+# image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
+# image_rec.show()
+# plt.plot(cost)
+# plt.show()
 
 x_final, y_final = sparse_rec_condatvu(
-     gradient_op=gradient_op_cd,
-     linear_op=linear_op,
-     prox_dual_op=prox_op,
-     std_est=None,
-     tau=None,
-     sigma=None,
-     relaxation_factor=1.0,
-     nb_of_reweights=0,
-     max_nb_of_iter=max_iter,
-     add_positivity=False,
-     atol=1e-4,
-     verbose=1,
-     patches_shape=(512, 512))
+    gradient_op=gradient_op_cd,
+    linear_op=linear_op,
+    prox_dual_op=prox_op,
+    cost_op=costObj([gradient_op_cd, prox_op]),
+    std_est=None,
+    tau=None,
+    sigma=None,
+    relaxation_factor=1.0,
+    nb_of_reweights=0,
+    max_nb_of_iter=max_iter,
+    add_positivity=False,
+    atol=1e-4,
+    verbose=1)
 
 image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(y_final)**2, axis=0)))
 image_rec_y.show()

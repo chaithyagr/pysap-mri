@@ -216,8 +216,12 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
             "Unrecognize std estimation method '{0}'.".format(std_est_method))
 
     # Define the initial primal and dual solutions
-    x_init = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
-    weights = linear_op.op(x_init)
+    x_init = np.array([])
+    if linear_op.multichannel:
+        # Use shape of Observed data and not Fourier Shape for MultiChannel
+        x_init = np.zeros(gradient_op._obs_data.shape, dtype=np.complex)
+    else:
+        x_init = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
 
     # Define the weights used during the thresholding in the dual domain,
     # the reweighting strategy, and the prox dual operator
@@ -246,7 +250,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     # Define the Condat Vu optimizer: define the tau and sigma in the
     # Condat-Vu proximal-dual splitting algorithm if not already provided.
     # Check also that the combination of values will lead to convergence.
-    norm = linear_op.l2norm(gradient_op.fourier_op.shape)
+    norm = linear_op.l2norm(x_init.shape)
     lipschitz_cst = gradient_op.spec_rad
     if sigma is None:
         sigma = 0.5
@@ -259,7 +263,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         1.0 / tau - sigma * norm ** 2 >= lipschitz_cst / 2.0)
 
     # Define initial primal and dual solutions
-    primal = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
+    primal = np.zeros(x_init.shape, dtype=np.complex)
     dual = linear_op.op(primal)
     dual[...] = 0.0
 
@@ -305,7 +309,8 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         tau_update=None,
         auto_iterate=False,
         metric_call_period=metric_call_period,
-        metrics=metrics)
+        metrics=metrics,
+        progress=False)
     cost_op = opt._cost_func
 
     # Perform the first reconstruction
