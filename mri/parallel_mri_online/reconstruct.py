@@ -20,8 +20,8 @@ import timeit
 # Package import
 from pysap.utils import fista_logo
 from pysap.utils import condatvu_logo
-from pysap.numerics.cost import DualGapCost
-from pysap.numerics.reweight import mReweight
+from mri.numerics.cost import DualGapCost
+from mri.numerics.reweight import mReweight
 # from pysap.plugins.mri.low_rank_p_MRI.proximity import NuclearNorm
 
 # Third party import

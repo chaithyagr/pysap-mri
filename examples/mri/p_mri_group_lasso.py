@@ -36,11 +36,11 @@ import matplotlib.pyplot as plt
 
 # Loading input data
 '''
-image_name = '/home/chaithyagr/Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
+image_name = '../../../../../Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
 k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 '''
-image_name = '/home/chaithyagr/Data/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
+image_name = '../../../../../Data/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
 k_space_ref = np.load(image_name)
     #loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
@@ -48,7 +48,7 @@ k_space_ref = np.transpose(k_space_ref)
 
 
 cartesian_reconstruction = True
-decimated = False
+decimated = True
 isGLprox = True
 
 if cartesian_reconstruction:
@@ -130,26 +130,29 @@ else:
                   bands_shape=linear_op.coeffs_shape,
                   n_channel=32)
 
-# x_final, transform, cost, metrics = sparse_rec_fista(
-#     gradient_op=gradient_op_cd,
-#     linear_op=linear_op,
-#     prox_op=prox_op,
-#     cost_op=costObj([gradient_op_cd, prox_op]),
-#     lambda_init=1.0,
-#     max_nb_of_iter=max_iter,
-#     atol=1e-4,
-#     verbose=1)
-#
-# image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-# image_rec.show()
-# plt.plot(cost)
-# plt.show()
+x_final, transform, cost, metrics = sparse_rec_fista(
+  gradient_op=gradient_op_cd,
+  linear_op=linear_op,
+  prox_op=prox_op,
+  cost_op=costObj([gradient_op_cd, prox_op]),
+  lambda_init=1.0,
+  max_nb_of_iter=max_iter,
+  atol=1e-4,
+  verbose=1)
+image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
+image_rec.show()
+plt.plot(cost)
+plt.show()
 
-x_final, y_final = sparse_rec_condatvu(
-    gradient_op=gradient_op_cd,
+gradient_op_cd_vu = Grad2D_pMRI(data=kspace_data,
+                                fourier_op=fourier_op,
+                                linear_op=None)
+
+x_final, transform_output, costs, metrics = sparse_rec_condatvu(
+    gradient_op=gradient_op_cd_vu,
     linear_op=linear_op,
     prox_dual_op=prox_op,
-    cost_op=costObj([gradient_op_cd, prox_op]),
+    cost_op=None,
     std_est=None,
     tau=None,
     sigma=None,
@@ -160,8 +163,8 @@ x_final, y_final = sparse_rec_condatvu(
     atol=1e-4,
     verbose=1)
 
-image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(y_final)**2, axis=0)))
-image_rec_y.show()
-
+# Why do we even do this??
+# image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(transform_output)**2, axis=0)))
+# image_rec_y.show()
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()

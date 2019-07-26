@@ -219,7 +219,8 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     x_init = np.array([])
     if linear_op.multichannel:
         # Use shape of Observed data and not Fourier Shape for MultiChannel
-        x_init = np.zeros(gradient_op._obs_data.shape, dtype=np.complex)
+        x_init = np.zeros((gradient_op.obs_data.shape[0],
+                           *gradient_op.fourier_op.shape), dtype=np.complex)
     else:
         x_init = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
 
@@ -352,9 +353,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     # Get the final solution
     x_final = opt.x_final
     if hasattr(linear_op, "transform"):
-        linear_op.transform.analysis_data = unflatten(
-            opt.y_final, linear_op.coeffs_shape)
-        transform_output = linear_op.transform
+        transform_output = linear_op.adj_op(opt.y_final)
     else:
         linear_op.coeff = opt.y_final
         transform_output = linear_op.coeff

@@ -96,7 +96,7 @@ class Wavelet2(object):
         if self.multichannel:
             images = []
             for channel, coeffs_shape in zip(range(coeffs.shape[0]),
-                                                   self.coeffs_shape):
+                                             self.coeffs_shape):
                 self.transform.analysis_data = self.unflatten(coeffs[channel],
                                                               coeffs_shape)
                 images.append(self.transform.synthesis().data)
