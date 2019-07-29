@@ -19,13 +19,14 @@ We also add some gaussian noise in the image space.
 import pysap
 from pysap.data import get_sample_data
 from mri.numerics.fourier import FFT2
+from modopt.opt.cost import costObj
 from mri.numerics.fourier import NFFT
 from mri.parallel_mri_online.linear import Identity
 from mri.parallel_mri_online.gradient import Grad2D_pMRI
 from mri.parallel_mri_online.proximity import NuclearNorm
 from mri.reconstruct.utils import convert_mask_to_locations
-from mri.parallel_mri_online.reconstruct import sparse_rec_fista
-from mri.parallel_mri_online.reconstruct import sparse_rec_condatvu
+from mri.numerics.reconstruct import sparse_rec_fista
+from mri.numerics.reconstruct import sparse_rec_condatvu
 
 # Third party import
 import numpy as np
@@ -93,7 +94,7 @@ kspace_data = np.asarray(kspace_data)
 # import ipdb; ipdb.set_trace()
 max_iter = 10
 
-linear_op = Identity()
+linear_op = Identity(multichannel=True)
 
 if cartesian_reconstruction:
     fourier_op = FFT2(samples=kspace_loc, shape=(512,512))
@@ -110,36 +111,36 @@ overlapping_factor = 4
 prox_op = NuclearNorm(weights=mu_value,
                       patch_shape=patch_shape,
                       overlapping_factor=overlapping_factor)
-x_final, cost = sparse_rec_fista(
+
+x_final, transform, cost, metrics = sparse_rec_fista(
     gradient_op=gradient_op_cd,
     linear_op=linear_op,
     prox_op=prox_op,
-    mu=mu_value,
+    cost_op=None,
     lambda_init=1.0,
     max_nb_of_iter=max_iter,
     atol=1e-4,
-    verbose=1,
-    get_cost=True)
+    verbose=1)
 
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
-plt.plot(cost)
-plt.show()
+#plt.plot(cost)
+#plt.show()
 
-x_final, y_final = sparse_rec_condatvu(
-     gradient_op=gradient_op_cd,
-     linear_op=linear_op,
-     std_est=None,
-     mu=mu_value,
-     tau=None,
-     sigma=None,
-     relaxation_factor=1.0,
-     nb_of_reweights=0,
-     max_nb_of_iter=max_iter,
-     add_positivity=False,
-     atol=1e-4,
-     verbose=1,
-     patches_shape=(512, 512))
+x_final, y_final, costs, metrics = sparse_rec_condatvu(
+    gradient_op=gradient_op_cd,
+    linear_op=linear_op,
+    prox_dual_op=prox_op,
+    cost_op=None,
+    std_est=None,
+    tau=None,
+    sigma=None,
+    relaxation_factor=1.0,
+    nb_of_reweights=0,
+    max_nb_of_iter=max_iter,
+    add_positivity=False,
+    atol=1e-4,
+    verbose=1)
 
 image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(y_final)**2, axis=0)))
 image_rec_y.show()

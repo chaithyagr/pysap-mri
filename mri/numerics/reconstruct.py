@@ -135,13 +135,14 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         print("Done.")
         print("Execution time: ", end - start, " seconds")
         print("-" * 40)
+    y_final = opt.x_final
     x_final = linear_op.adj_op(opt.x_final)
     if hasattr(cost_op, "cost"):
         costs = cost_op._cost_list
     else:
         costs = None
 
-    return x_final, linear_op.transform, costs, opt.metrics
+    return x_final, y_final, costs, opt.metrics
 
 
 def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,

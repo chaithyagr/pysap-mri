@@ -158,7 +158,8 @@ class WaveletUD2(object):
         ]
         self._has_run = False
         self.coeffs_shape = None
-        self._shape = (None,)
+        self.flatten = flatten
+        self.unflatten = unflatten
 
     def _get_filters(self, shape):
         """ Function to get the Wavelet coefficients of Delta[0][0]. This function is called only once and later the
@@ -170,7 +171,6 @@ class WaveletUD2(object):
             coarse=True,
         )
         self._has_run = True
-        self._shape = shape
 
     def op(self, data):
         """ Define the wavelet operator.
@@ -187,21 +187,25 @@ class WaveletUD2(object):
         coeffs: ndarray
             the wavelet coefficients.
         """
-        if not self._has_run or data.shape != self._shape:
+        if not self._has_run:
             if self.multichannel:
                 self._get_filters(list(data.shape)[1:])
             else:
                 self._get_filters(data.shape)
         if self.multichannel:
-            coefs_real = np.array([filter_convolve(data[channel].real, self.transform)
-                                   for channel in np.arange(data.shape[0])])
-            coefs_imag = np.array([filter_convolve(data[channel].real, self.transform)
-                                   for channel in np.arange(data.shape[0])])
+            coeffs = []
+            self.coeffs_shape = []
+            for channel in range(data.shape[0]):
+                coefs_real, coeffs_shape = self.flatten(filter_convolve(data[channel].real, self.transform))
+                coefs_imag, coeffs_shape = self.flatten(filter_convolve(data[channel].imag, self.transform))
+                coeffs.append(coefs_real + 1j * coefs_imag)
+                self.coeffs_shape.append(coeffs_shape)
+            return np.asarray(coeffs)
         else:
             coefs_real = filter_convolve(data.real, self.transform)
             coefs_imag = filter_convolve(data.imag, self.transform)
-        self.coeffs_shape = coefs_imag.shape
-        return coefs_real + 1j * coefs_imag
+            coeffs, self.coeffs_shape = self.flatten(coefs_real + 1j * coefs_imag)
+        return coeffs
 
     def adj_op(self, coefs):
         """ Define the wavelet adjoint operator.
@@ -226,13 +230,15 @@ class WaveletUD2(object):
                 "`op` must be run before `adj_op` to get the data shape",
             )
         if self.multichannel:
-            data_real = np.array([filter_convolve(coefs.real[channel], self.transform, filter_rot=True)
-                                  for channel in np.arange(coefs.imag.shape[0])])
-            data_imag = np.array([filter_convolve(coefs.imag[channel], self.transform, filter_rot=True)
-                                  for channel in np.arange(coefs.imag.shape[0])])
+            images = []
+            for channel, coeffs_shape in zip(range(coefs.shape[0]), self.coeffs_shape):
+                data_real = filter_convolve(np.squeeze(self.unflatten(coefs.real[channel], coeffs_shape)), self.transform, filter_rot=True)
+                data_imag = filter_convolve(np.squeeze(self.unflatten(coefs.imag[channel], coeffs_shape)), self.transform, filter_rot=True)
+                images.append(data_real + 1j * data_imag)
+            return np.asarray(images)
         else:
-            data_real = filter_convolve(coefs.real, self.transform, filter_rot=True)
-            data_imag = filter_convolve(coefs.imag, self.transform, filter_rot=True)
+            data_real = filter_convolve(np.squeeze(self.unflatten(coefs.real, self.coeffs_shape)), self.transform, filter_rot=True)
+            data_imag = filter_convolve(np.squeeze(self.unflatten(coefs.imag, self.coeffs_shape)), self.transform, filter_rot=True)
         return data_real + 1j * data_imag
 
     def l2norm(self, shape):

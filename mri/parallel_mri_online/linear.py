@@ -27,6 +27,9 @@ import numpy
 class Identity(object):
     """ The 2D wavelet transform class.
     """
+    def __init__(self, multichannel=False):
+        self.multichannel = multichannel
+
     def op(self, data):
         self.coeffs_shape = data.shape
         return data

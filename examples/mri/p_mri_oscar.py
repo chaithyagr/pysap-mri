@@ -19,6 +19,7 @@ We also add some gaussian noise in the image space.
 import pysap
 from pysap.data import get_sample_data
 import mri.reconstruct.linear as linear_operators
+from modopt.opt.cost import costObj
 from mri.reconstruct.fourier import FFT2
 from mri.reconstruct.fourier import NFFT
 from mri.parallel_mri_online.proximity import OWL
@@ -118,11 +119,11 @@ prox_op = OWL(mu_value,
               bands_shape=linear_op.coeffs_shape,
               n_channel=32)
 
-x_final, cost = sparse_rec_fista(
+x_final, y_final, cost, metrics = sparse_rec_fista(
     gradient_op=gradient_op_cd,
     linear_op=linear_op,
     prox_op=prox_op,
-    cost_op=None,
+    cost_op=costObj([gradient_op_cd, prox_op]),
     lambda_init=1.0,
     max_nb_of_iter=max_iter,
     atol=1e-4,
@@ -140,18 +141,19 @@ gradient_op_cd = Grad2D_pMRI(data=kspace_data,
                              linear_op=None)
 
 x_final, y_final = sparse_rec_condatvu(
-     gradient_op=gradient_op_cd,
-     linear_op=linear_op,
-     prox_dual_op=prox_op,
-     std_est=None,
-     tau=None,
-     sigma=None,
-     relaxation_factor=1.0,
-     nb_of_reweights=0,
-     max_nb_of_iter=max_iter,
-     add_positivity=False,
-     atol=1e-4,
-     verbose=1)
+    gradient_op=gradient_op_cd,
+    linear_op=linear_op,
+    cost_op=costObj([gradient_op_cd, prox_op]),
+    prox_dual_op=prox_op,
+    std_est=None,
+    tau=None,
+    sigma=None,
+    relaxation_factor=1.0,
+    nb_of_reweights=0,
+    max_nb_of_iter=max_iter,
+    add_positivity=False,
+    atol=1e-4,
+    verbose=1)
 
 image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(y_final)**2, axis=0)))
 image_rec_y.show()

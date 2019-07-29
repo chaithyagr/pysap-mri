@@ -27,12 +27,12 @@ from mri.parallel_mri_online.proximity import GroupLasso
 from mri.reconstruct.utils import convert_mask_to_locations
 from mri.numerics.reconstruct import sparse_rec_fista
 from mri.numerics.reconstruct import sparse_rec_condatvu
-from mri.parallel_mri_online.proximity import OWL
 
 # Third party import
 import numpy as np
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
+from skimage.measure import compare_ssim
 
 # Loading input data
 
@@ -48,9 +48,8 @@ k_space_ref /= np.linalg.norm(k_space_ref)
 k_space_ref = np.transpose(k_space_ref)
 '''
 
-cartesian_reconstruction = False
+cartesian_reconstruction = True
 decimated = False
-isGLprox = False
 
 if cartesian_reconstruction:
     Sl = np.zeros((32, 512, 512), dtype='complex128')
@@ -70,7 +69,6 @@ mask = get_sample_data("mri-mask")
 mask.show()
 image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
 image.show()
-#############################################################################
 # Generate the kspace
 # -------------------
 #
@@ -136,8 +134,10 @@ image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
 plt.plot(cost)
 plt.show()
+A = compare_ssim(image_rec.data, SOS)
+print("Compared SSIM is : " + str(A))
 
-plt.imsave("GL_Undecimated_SRF.png", image_rec)
+plt.imsave("GL_Decimated_SRF.png", image_rec)
 
 gradient_op_cd_vu = Grad2D_pMRI(data=kspace_data,
                                 fourier_op=fourier_op,
@@ -163,4 +163,7 @@ image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(transform_output)**2, axis=
 image_rec_y.show()
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
-plt.imsave("GL_Undecimated_CVu.png", image_rec)
+A = compare_ssim(image_rec.data, SOS)
+print("Compared SSIM is : " + str(A))
+
+plt.imsave("GL_Decimated_CVu.png", image_rec)
