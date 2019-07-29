@@ -461,6 +461,13 @@ class OWL(object):
             start = stop
         return output
 
+    def _prox_OWL_cost(self, data, weights):
+        """Cost function of OWL
+        :param Data : ndArray, holds array of observed data"""
+        # Sort the data
+        data_abs = np.sort(np.abs(data))
+        return np.sum(data_abs * weights)
+
     def op(self, data, extra_factor=1.0):
         """
         Define the proximity operator of the OWL norm
@@ -504,8 +511,19 @@ class OWL(object):
         -------
         The cost of this sparse code
         """
-        warnings.warn('Cost function not implemented yet', UserWarning)
-        return 0
+        if self.mode is 'all':
+            cost = self._prox_OWL_cost(data, self.weights)
+        elif self.mode is 'band_based':
+            data_r = self._reshape_mode_based(data)
+            cost = 0
+            for data_band, weights in zip(data_r, self.weights):
+                cost = cost + self._prox_OWL_cost(data_band, weights)
+            cost = 0
+        elif self.mode is 'coeff_based':
+            cost = 0
+            for idx in range(data.shape[1]):
+                cost = cost + self._prox_OWL_cost(np.squeeze(data[:, idx]), self.weights)
+        return cost
 
 
 class k_support_norm(object):

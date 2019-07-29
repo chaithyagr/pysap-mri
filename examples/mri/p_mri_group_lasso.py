@@ -35,21 +35,22 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
 # Loading input data
-'''
+
 image_name = '../../../../../Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
 k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
+
 '''
 image_name = '../../../../../Data/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
 k_space_ref = np.load(image_name)
     #loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 k_space_ref = np.transpose(k_space_ref)
-
+'''
 
 cartesian_reconstruction = True
 decimated = True
-isGLprox = True
+isGLprox = False
 
 if cartesian_reconstruction:
     Sl = np.zeros((32, 512, 512), dtype='complex128')
@@ -140,9 +141,7 @@ x_final, transform, cost, metrics = sparse_rec_fista(
   atol=1e-4,
   verbose=1)
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-image_rec.show()
-plt.plot(cost)
-plt.show()
+plt.imsave("Recon_Image_Sparse_rec_Fista_Undecimated_OWL.png", image_rec)
 
 gradient_op_cd_vu = Grad2D_pMRI(data=kspace_data,
                                 fourier_op=fourier_op,
@@ -167,4 +166,6 @@ x_final, transform_output, costs, metrics = sparse_rec_condatvu(
 # image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(transform_output)**2, axis=0)))
 # image_rec_y.show()
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-image_rec.show()
+plt.imsave("Recon_Image_CondatVu_Undecimated_OWL.png", image_rec)
+
+plt.imshow(image_rec)
