@@ -48,8 +48,8 @@ k_space_ref /= np.linalg.norm(k_space_ref)
 k_space_ref = np.transpose(k_space_ref)
 '''
 
-cartesian_reconstruction = True
-decimated = True
+cartesian_reconstruction = False
+decimated = False
 isGLprox = False
 
 if cartesian_reconstruction:
@@ -67,9 +67,9 @@ else:
     SOS = np.sqrt(np.sum(np.abs(Sl)**2, 0))
 
 mask = get_sample_data("mri-mask")
-# mask.show()
+mask.show()
 image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
-# image.show()
+image.show()
 #############################################################################
 # Generate the kspace
 # -------------------
@@ -121,15 +121,7 @@ gradient_op_cd = Grad2D_pMRI(data=kspace_data,
                              fourier_op=fourier_op,
                              linear_op=linear_op)
 mu_value = 1e-7
-if isGLprox:
-    prox_op = GroupLasso(mu_value)
-else:
-    beta = 1e-15
-    prox_op = OWL(mu_value,
-                  beta,
-                  mode='band_based',
-                  bands_shape=linear_op.coeffs_shape,
-                  n_channel=32)
+prox_op = GroupLasso(mu_value)
 
 x_final, transform, cost, metrics = sparse_rec_fista(
   gradient_op=gradient_op_cd,
@@ -141,7 +133,11 @@ x_final, transform, cost, metrics = sparse_rec_fista(
   atol=1e-4,
   verbose=1)
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-plt.imsave("Recon_Image_Sparse_rec_Fista_Undecimated_OWL.png", image_rec)
+image_rec.show()
+plt.plot(cost)
+plt.show()
+
+plt.imsave("GL_Undecimated_SRF.png", image_rec)
 
 gradient_op_cd_vu = Grad2D_pMRI(data=kspace_data,
                                 fourier_op=fourier_op,
@@ -163,9 +159,8 @@ x_final, transform_output, costs, metrics = sparse_rec_condatvu(
     verbose=1)
 
 # Why do we even do this??
-# image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(transform_output)**2, axis=0)))
-# image_rec_y.show()
+image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(transform_output)**2, axis=0)))
+image_rec_y.show()
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-plt.imsave("Recon_Image_CondatVu_Undecimated_OWL.png", image_rec)
-
-plt.imshow(image_rec)
+image_rec.show()
+plt.imsave("GL_Undecimated_CVu.png", image_rec)

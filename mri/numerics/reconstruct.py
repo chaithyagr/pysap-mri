@@ -86,7 +86,8 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
     x_init = np.array([])
     if linear_op.multichannel:
         # Use shape of Observed data and not Fourier Shape for MultiChannel
-        x_init = np.zeros(gradient_op._obs_data.shape, dtype=np.complex)
+        x_init = np.zeros((gradient_op.obs_data.shape[0],
+                       *gradient_op.fourier_op.shape), dtype=np.complex)
     else:
         x_init = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
     alpha = linear_op.op(x_init)

@@ -157,6 +157,7 @@ class WaveletUD2(object):
             '-n{}'.format(self.nb_scale),
         ]
         self._has_run = False
+        self.coeffs_shape = None
         self._shape = (None,)
 
     def _get_filters(self, shape):
@@ -199,6 +200,7 @@ class WaveletUD2(object):
         else:
             coefs_real = filter_convolve(data.real, self.transform)
             coefs_imag = filter_convolve(data.imag, self.transform)
+        self.coeffs_shape = coefs_imag.shape
         return coefs_real + 1j * coefs_imag
 
     def adj_op(self, coefs):

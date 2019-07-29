@@ -18,14 +18,14 @@ We also add some gaussian noise in the image space.
 # Package import
 import pysap
 from pysap.data import get_sample_data
-from pysap.plugins.mri.reconstruct.reconstruct import FFT2
-from pysap.plugins.mri.reconstruct.reconstruct import NFFT2
-from pysap.plugins.mri.parallel_mri_online.linear import Pywavelet2
-from pysap.plugins.mri.parallel_mri_online.gradient import Grad2D_pMRI
-from pysap.plugins.mri.reconstruct.utils import convert_mask_to_locations
-from pysap.plugins.mri.parallel_mri_online.reconstruct import sparse_rec_fista
-from pysap.plugins.mri.parallel_mri_online.reconstruct import sparse_rec_condatvu
-from pysap.plugins.mri.parallel_mri_online.proximity import MultiLevelNuclearNorm
+from mri.numerics.fourier import FFT2
+from mri.numerics.fourier import NFFT
+from mri.parallel_mri_online.linear import Pywavelet2
+from mri.parallel_mri_online.gradient import Grad2D_pMRI
+from mri.reconstruct.utils import convert_mask_to_locations
+from mri.parallel_mri_online.reconstruct import sparse_rec_fista
+from mri.parallel_mri_online.reconstruct import sparse_rec_condatvu
+from mri.parallel_mri_online.proximity import MultiLevelNuclearNorm
 
 # Third party import
 import numpy as np
@@ -33,8 +33,7 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
 # Loading input data
-image_name = '/volatile/data/2017-05-30_32ch/'\
-            '/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
+image_name = '../../../../../Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
 k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 cartesian_reconstruction = False
@@ -47,7 +46,7 @@ if cartesian_reconstruction:
     SOS = np.sqrt(np.sum(np.abs(Sl)**2, 0))
 else:
     full_samples_loc = convert_mask_to_locations(np.ones((512, 512)))
-    gen_image_op = NFFT2(samples=full_samples_loc, shape=(512,512))
+    gen_image_op = NFFT(samples=full_samples_loc, shape=(512,512))
     Sl = np.zeros((32, 512, 512), dtype='complex128')
     for channel in range(k_space_ref.shape[-1]):
         Sl[channel] = gen_image_op.adj_op(np.reshape(k_space_ref[:, channel], (512, 512)))
@@ -76,7 +75,7 @@ if cartesian_reconstruction:
     kspace_data = np.asarray(kspace_data)
 else:
     kspace_loc = convert_mask_to_locations(mask.data)
-    fourier_op_1 = NFFT2(samples=kspace_loc, shape=image.shape)
+    fourier_op_1 = NFFT(samples=kspace_loc, shape=image.shape)
     kspace_data = []
     for channel in range(Sl.shape[0]):
         kspace_data.append(fourier_op_1.op(Sl[channel]))
@@ -106,7 +105,7 @@ _ = linear_op.op(np.zeros(Sl.shape))
 if cartesian_reconstruction:
     fourier_op = FFT2(samples=kspace_loc, shape=(512,512))
 else:
-    fourier_op = NFFT2(samples=kspace_loc, shape=(512, 512))
+    fourier_op = NFFT(samples=kspace_loc, shape=(512, 512))
 
 
 gradient_op_cd = Grad2D_pMRI(data=kspace_data,

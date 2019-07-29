@@ -18,7 +18,7 @@ We also add some gaussian noise in the image space.
 # Package import
 import pysap
 from pysap.data import get_sample_data
-from mri.reconstruct.linear import Wavelet2
+import mri.reconstruct.linear as linear_operators
 from mri.reconstruct.fourier import FFT2
 from mri.reconstruct.fourier import NFFT
 from mri.parallel_mri_online.proximity import OWL
@@ -33,18 +33,12 @@ from scipy.io import loadmat
 import matplotlib.pyplot as plt
 
 # Loading input data
-# image_name = '/volatile/data/2017-05-30_32ch/'\
-#             '/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
-# k_space_ref = loadmat(image_name)['ref']
-# k_space_ref /= np.linalg.norm(k_space_ref)
-
-image_name = '/home/chaithyagr/Downloads/meas_MID63_CSGRE_ref_OS1_3mm_FID16347.npy'
-k_space_ref = np.load(image_name)
+image_name = '../../../../../Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
+k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
-k_space_ref = np.transpose(k_space_ref)
-
 
 cartesian_reconstruction = False
+decimated = False
 
 if cartesian_reconstruction:
     Sl = np.zeros((32, 512, 512), dtype='complex128')
@@ -101,10 +95,11 @@ kspace_data = np.asarray(kspace_data)
 # import ipdb; ipdb.set_trace()
 max_iter = 10
 
-linear_op = Wavelet2(wavelet_name="UndecimatedBiOrthogonalTransform",
-                     nb_scale=4, multichannel=True)
+if decimated:
+    linear_op = linear_operators.Wavelet2(wavelet_name='db4', nb_scale=4, multichannel=True)
+else:
+    linear_op = linear_operators.WaveletUD2(wavelet_id=24, nb_scale=4, multichannel=True)
 
-alpha_0 = linear_op.op(np.zeros((32, 512, 512)))
 
 if cartesian_reconstruction:
     fourier_op = FFT2(samples=kspace_loc, shape=(512, 512))
@@ -137,6 +132,12 @@ image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
 plt.plot(cost)
 plt.show()
+plt.imsave("OSCAR_Undecimated_filter_SRF.png", image_rec)
+
+
+gradient_op_cd = Grad2D_pMRI(data=kspace_data,
+                             fourier_op=fourier_op,
+                             linear_op=None)
 
 x_final, y_final = sparse_rec_condatvu(
      gradient_op=gradient_op_cd,
@@ -157,3 +158,4 @@ image_rec_y.show()
 
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
+plt.imsave("OSCAR_Undecimated_filter_CVu.png", image_rec)
