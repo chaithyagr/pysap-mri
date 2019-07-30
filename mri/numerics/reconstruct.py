@@ -242,7 +242,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         if std_est is None:
             std_est = 0.0
         weights[...] = std_thr * std_est
-        reweight_op = mReweight(weights, linear_op, thresh_factor=std_thr)
+        reweight_op = cwbReweight(weights)
         prox_dual_op.weights = reweight_op.weights
 
     # Case3: manual regularization mode, no reweighting
@@ -328,7 +328,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         if std_est_method == "primal":
             reweight_op.reweight(linear_op.op(opt._x_new))
         else:
-            std_est = reweight_op.reweight(opt._x_new)
+            std_est = reweight_op.reweight(opt._y_new)
 
         # Welcome message
         if verbose > 0:

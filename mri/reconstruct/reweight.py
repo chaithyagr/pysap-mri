@@ -53,7 +53,7 @@ class mReweight(object):
         sigma_est: ndarray
             the variance estimate on each scale.
         """
-        self.linear_op.op(x_new)
+        coeffs = self.linear_op.op(x_new)
         weights = np.empty((0, ), dtype=self.weights.dtype)
         sigma_est = []
         for scale in range(self.linear_op.transform.nb_scale):
