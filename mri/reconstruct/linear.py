@@ -25,7 +25,7 @@ from modopt.signal.wavelet import get_mr_filters, filter_convolve
 class Wavelet2(object):
     """ The 2D wavelet transform class.
     """
-    def __init__(self, wavelet_name, nb_scale=4, verbose=0, multichannel=False):
+    def __init__(self, wavelet_name, nb_scale=4, verbose=0, multichannel=False, **kwargs):
         """ Initialize the 'Wavelet2' class.
         Parameters
         ----------
@@ -43,7 +43,7 @@ class Wavelet2(object):
                 "Unknown transformation '{0}'.".format(wavelet_name))
         transform_klass = pysap.load_transform(wavelet_name)
         self.transform = transform_klass(
-            nb_scale=self.nb_scale, verbose=verbose)
+            nb_scale=self.nb_scale, verbose=verbose, **kwargs)
         self.coeffs_shape = None
         self.flatten = flatten
         self.unflatten = unflatten

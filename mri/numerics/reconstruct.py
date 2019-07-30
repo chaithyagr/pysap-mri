@@ -117,8 +117,8 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         metric_call_period=metric_call_period,
         metrics=metrics,
         linear=linear_op,
-        beta_param=gradient_op.inv_spec_rad,
-        progress=False)
+        beta_param=gradient_op.inv_spec_rad)
+
     cost_op = opt._cost_func
 
     # Perform the reconstruction
@@ -312,8 +312,8 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         tau_update=None,
         auto_iterate=False,
         metric_call_period=metric_call_period,
-        metrics=metrics,
-        progress=False)
+        metrics=metrics)
+
     cost_op = opt._cost_func
 
     # Perform the first reconstruction
