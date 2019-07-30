@@ -119,31 +119,31 @@ prox_op = OWL(mu_value,
               bands_shape=linear_op.coeffs_shape,
               n_channel=32)
 
-x_final, y_final, cost, metrics = sparse_rec_fista(
-    gradient_op=gradient_op_cd,
-    linear_op=linear_op,
-    prox_op=prox_op,
-    cost_op=costObj([gradient_op_cd, prox_op]),
-    lambda_init=1.0,
-    max_nb_of_iter=max_iter,
-    atol=1e-4,
-    verbose=1)
-
-image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-image_rec.show()
-plt.plot(cost)
-plt.show()
-plt.imsave("OSCAR_Undecimated_filter_SRF.png", image_rec)
+#  x_final, y_final, cost, metrics = sparse_rec_fista(
+#      gradient_op=gradient_op_cd,
+#      linear_op=linear_op,
+#      prox_op=prox_op,
+#      cost_op=costObj([gradient_op_cd, prox_op]),
+#      lambda_init=1.0,
+#      max_nb_of_iter=max_iter,
+#      atol=1e-4,
+#      verbose=1)
+#
+#  image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
+#  image_rec.show()
+#  plt.plot(cost)
+#  plt.show()
+#  plt.imsave("OSCAR_Undecimated_filter_SRF.png", image_rec)
 
 
 gradient_op_cd = Grad2D_pMRI(data=kspace_data,
                              fourier_op=fourier_op,
                              linear_op=None)
 
-x_final, y_final = sparse_rec_condatvu(
+x_final, y_final, costs, metrics = sparse_rec_condatvu(
     gradient_op=gradient_op_cd,
     linear_op=linear_op,
-    cost_op=costObj([gradient_op_cd, prox_op]),
+    cost_op=None,
     prox_dual_op=prox_op,
     std_est=None,
     tau=None,

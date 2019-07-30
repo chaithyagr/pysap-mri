@@ -226,9 +226,9 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     else:
         x_init = np.zeros(gradient_op.fourier_op.shape, dtype=np.complex)
 
+    weights = linear_op.op(x_init)
     # Define the weights used during the thresholding in the dual domain,
     # the reweighting strategy, and the prox dual operator
-
     # Case1: estimate the noise std in the image domain
     if std_est_method == "primal":
         if std_est is None:
