@@ -18,7 +18,3 @@ dist/
 pysap_mri.egg-info/
 __pycache__/
 .eggs/
-/examples/mri/Recon_Image_CondatVu_decimated_OWL.png
-/examples/mri/Recon_Image_CondatVu_Undecimated_OWL.png
-/examples/mri/Recon_Image_Sparse_rec_Fista_decimated_OWL.png
-/examples/mri/Recon_Image_Sparse_rec_Fista_Undecimated_OWL.png
