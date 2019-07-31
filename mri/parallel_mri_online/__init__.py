@@ -8,10 +8,5 @@
 ##########################################################################
 
 """
-This module contains shortcuts to linear classes.
+This module defines all the MRI reconstruction plugin.
 """
-
-# Package import
-from mri.reconstruct.linear import Wavelet2
-from mri.reconstruct.linear import Identity
-from mri.reconstruct.linear import WaveletUD2
