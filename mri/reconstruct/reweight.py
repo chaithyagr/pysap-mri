@@ -41,7 +41,7 @@ class mReweight(object):
         self.linear_op = linear_op
 
     def reweight(self, x_new):
-        """ Updat the weights.
+        """ Update the weights.
 
         Parameters
         ----------
@@ -53,18 +53,28 @@ class mReweight(object):
         sigma_est: ndarray
             the variance estimate on each scale.
         """
+        #TODO this must be extended to multichannel cases.
         coeffs = self.linear_op.op(x_new)
-        weights = np.empty((0, ), dtype=self.weights.dtype)
-        sigma_est = []
-        for scale in range(self.linear_op.transform.nb_scale):
-            bands_array, _ = flatten(self.linear_op.transform[scale])
-            if scale == (self.linear_op.transform.nb_scale - 1):
-                std_at_scale_i = 0.
-            else:
-                std_at_scale_i = sigma_mad(bands_array)
-            sigma_est.append(std_at_scale_i)
-            thr = np.ones(bands_array.shape, dtype=weights.dtype)
-            thr *= self.thresh_factor * std_at_scale_i
-            weights = np.concatenate((weights, thr))
+        if self.linear_op.multichannel:
+            weights = []
+            for channel, coeffs_shape in zip(range(coeffs.shape[0]),
+                                             self.linear_op.coeffs_shape):
+                coeff_ch = self.linear_op.unflatten(coeffs[channel],
+                                                              coeffs_shape)
+                for band in coeffs_shape:
+                    bands_array = flatten(coeff_ch[band])
+        else:
+            weights = np.empty((0, ), dtype=self.weights.dtype)
+            sigma_est = []
+            for scale in range(self.linear_op.transform.nb_scale):
+                bands_array, _ = flatten(self.linear_op.transform[scale])
+                if scale == (self.linear_op.transform.nb_scale - 1):
+                    std_at_scale_i = 0.
+                else:
+                    std_at_scale_i = sigma_mad(bands_array)
+                sigma_est.append(std_at_scale_i)
+                thr = np.ones(bands_array.shape, dtype=weights.dtype)
+                thr *= self.thresh_factor * std_at_scale_i
+                weights = np.concatenate((weights, thr))
         self.weights = weights
         return sigma_est

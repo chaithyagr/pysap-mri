@@ -56,9 +56,9 @@ else:
     SOS = np.sqrt(np.sum(np.abs(Sl)**2, 0))
 
 mask = get_sample_data("mri-mask")
-mask.show()
+#mask.show()
 image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
-image.show()
+#image.show()
 
 #############################################################################
 # Generate the kspace
@@ -94,7 +94,7 @@ kspace_data = np.asarray(kspace_data)
 
 # Start the FISTA reconstruction
 # import ipdb; ipdb.set_trace()
-max_iter = 10
+max_iter = 3
 
 if decimated:
     linear_op = linear_operators.Wavelet2(wavelet_name='db4', nb_scale=4, multichannel=True)
@@ -132,8 +132,8 @@ x_final, y_final, costs, metrics = sparse_rec_condatvu(
     verbose=1)
 
 image_rec_y = pysap.Image(data=np.sqrt(np.sum(np.abs(y_final)**2, axis=0)))
-image_rec_y.show()
+#image_rec_y.show()
 
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
-image_rec.show()
+#image_rec.show()
 plt.imsave("OSCAR_Decimated_filter_CVu.png", image_rec)

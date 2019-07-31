@@ -232,8 +232,16 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     # Case1: estimate the noise std in the image domain
     if std_est_method == "primal":
         if std_est is None:
-            std_est = sigma_mad(gradient_op.MtX(data))
-        weights[...] = std_thr * std_est
+            if linear_op.multichannel:
+                std_est = []
+                for channel in np.arange(gradient_op.obs_data.shape[0]):
+                    std_est.append(sigma_mad(gradient_op.fourier_op.adj_op(gradient_op.obs_data[channel])))
+                std_est = np.asarray(std_est)
+                std_est = std_est[:, np.newaxis]
+                weights[...] = np.repeat(std_thr * std_est, weights.shape[1], axis=1)  #TODO this must be generalized for non-flattened cases
+            else:
+                std_est = sigma_mad(gradient_op.fourier_op.adj_op(gradient_op.obs_data))
+                weights[...] = std_thr * std_est
         reweight_op = cwbReweight(weights)
         prox_dual_op.weights = reweight_op.weights
 
@@ -242,7 +250,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         if std_est is None:
             std_est = 0.0
         weights[...] = std_thr * std_est
-        reweight_op = cwbReweight(weights)
+        reweight_op = mReweight(weights, linear_op, thresh_factor=std_thr)
         prox_dual_op.weights = reweight_op.weights
 
     # Case3: manual regularization mode, no reweighting
@@ -328,7 +336,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
         if std_est_method == "primal":
             reweight_op.reweight(linear_op.op(opt._x_new))
         else:
-            std_est = reweight_op.reweight(opt._y_new)
+            std_est = reweight_op.reweight(opt._x_new)
 
         # Welcome message
         if verbose > 0:

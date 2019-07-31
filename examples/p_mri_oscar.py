@@ -37,12 +37,16 @@ import matplotlib.pyplot as plt
 
 # Loading input data
 image_name = '../../../../Data/meas_MID41_CSGRE_ref_OS1_FID14687.mat'
-mask_name = '../../../../Data/nc34_ns3073_decim64_res512_nCheb4_gradit200_D12M7Y2019_T95.043810Min.npy'
+mask_name = '../../../../Data/SPARKLING_decim_2.npy'
 k_space_ref = loadmat(image_name)['ref']
 k_space_ref /= np.linalg.norm(k_space_ref)
 
 cartesian_reconstruction = False
 decimated = True
+use_sparkling = True
+
+if use_sparkling:
+    cartesian_reconstruction = False    # We need to use cartesian recon
 
 if cartesian_reconstruction:
     Sl = np.zeros((32, 512, 512), dtype='complex128')
@@ -63,8 +67,8 @@ mask.show()
 image = pysap.Image(data=np.abs(SOS), metadata=mask.metadata)
 image.show()
 
-
-mask_kspace = np.load(mask_name)
+if use_sparkling:
+    mask_kspace = np.load(mask_name)
 
 #############################################################################
 # Generate the kspace
@@ -82,16 +86,17 @@ if cartesian_reconstruction:
     [kspace_data.append(mask.data * np.fft.fft2(Sl[channel]))
         for channel in range(Sl.shape[0])]
 else:
-    kspace_loc = convert_mask_to_locations(mask.data)
-    kspace_loc = mask_kspace
-    mask = convert_locations_to_mask(mask_kspace, (512, 512))
+    if use_sparkling:
+        kspace_loc = mask_kspace * np.pi
+        #mask2 = convert_locations_to_mask(kspace_loc, (512, 512))
+    else:
+        kspace_loc = convert_mask_to_locations(mask.data)
     fourier_op_1 = NFFT(samples=kspace_loc, shape=image.shape)
     kspace_data = []
     for channel in range(Sl.shape[0]):
         kspace_data.append(fourier_op_1.op(Sl[channel]))
 
 kspace_data = np.asarray(kspace_data)
-
 #############################################################################
 # FISTA optimization
 # ------------------
@@ -102,7 +107,7 @@ kspace_data = np.asarray(kspace_data)
 
 # Start the FISTA reconstruction
 # import ipdb; ipdb.set_trace()
-max_iter = 10
+max_iter = 150
 
 if decimated:
     linear_op = linear_operators.Wavelet2(wavelet_name='db4', nb_scale=4, multichannel=True)
@@ -168,6 +173,6 @@ image_rec_y.show()
 
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
 image_rec.show()
-plt.imsave("OSCAR_UnDecimated_filter_CVu_SPARKLING.png", image_rec)
+plt.imsave("OSCAR_Decimated_filter_CVu_SPARKLING.png", image_rec)
 ssim = compare_ssim(image_rec.data, SOS)
 print("The SSIM is : " + str(ssim))
