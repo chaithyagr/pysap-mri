@@ -4,15 +4,8 @@ Neuroimaging cartesian reconstruction
 
 Credit: Chaithya G R
 
-In this tutorial we will reconstruct an MRI image from the sparse kspace
+In this tutorial we will reconstruct a 3D-MRI image from the sparse kspace
 measurments.
-
-Import neuroimaging data
-------------------------
-
-We use the toy datasets available in pysap, more specifically a 2D brain slice
-and the acquistion cartesian scheme.
-We also add some gaussian noise in the image space.
 """
 
 # Package import
@@ -20,8 +13,8 @@ import pysap
 from pysap.extensions.transform import PyWaveletTransformBase
 from modopt.opt.cost import costObj
 from mri.reconstruct.fourier import NFFT
-from mri.parallel_mri_online.proximity import OWL
 from mri.parallel_mri_online.gradient import Grad2D_pMRI
+from mri.parallel_mri.extract_sensitivity_maps import extract_k_space_center_and_locations, get_Smaps
 from mri.reconstruct.utils import convert_locations_to_mask
 from mri.reconstruct.utils import convert_mask_to_locations
 from mri.numerics.reconstruct import sparse_rec_fista
@@ -53,13 +46,43 @@ def get_samples(filename):
 # Loading input data
 N = 256
 Nz = 100
-image_name = '/neurospin/optimed/Chaithya/20190802_benchmark_3D_v5/raw/' \
+kspace_loc=[]
+kspace_data=[]
+try:
+    (kspace_loc, kspace_data) = np.load("/neurospin/optimed/Chaithya/Temp_data.npy")
+except:
+    print("Could not find temp file, loading data!")
+    image_name = '/neurospin/optimed/Chaithya/20190802_benchmark_3D_v5/raw/' \
             'meas_MID00457_FID13121_nsCSGRE3D_N384_FOV192_Nz64_nc32_ns2049_OS2.dat'
-mask_name = '/neurospin/optimed/Chaithya/20190802_benchmark_3D_v5/samples_9.mat'
-kspace_data = get_raw_data(image_name)
-kspace_loc = get_samples(mask_name)
+    mask_name = '/neurospin/optimed/Chaithya/20190802_benchmark_3D_v5/samples_9.mat'
+    kspace_data = get_raw_data(image_name)
+    kspace_loc = get_samples(mask_name)
+    np.save("/neurospin/optimed/Chaithya/Temp_data.npy", (kspace_loc, kspace_data))
 
 decimated = True
+
+# Generate the senitivity matrix from undersampled data
+data_thresholded, samples_thresholded = extract_k_space_center_and_locations(
+    data_values=kspace_data,
+    samples_locations=kspace_loc,
+    thr=(0.5/128*5, 0.5/128*5),
+    img_shape=(N, N, Nz))
+
+Smaps, SOS_Smaps = get_Smaps(
+    k_space=data_thresholded,
+    img_shape=(N, N, Nz),
+    samples=samples_thresholded,
+    mode='Gridding',
+    min_samples=np.min(kspace_loc),
+    max_samples=np.max(kspace_loc),
+    method='linear')
+
+
+
+
+
+
+
 #############################################################################
 # FISTA optimization
 # ------------------

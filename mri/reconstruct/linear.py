@@ -16,11 +16,70 @@ This module contains linears operators classes.
 import pysap
 from pysap.base.utils import flatten
 from pysap.base.utils import unflatten
+from pysap.extensions.transform import PyWaveletTransformBase
 
 # Third party import
 import numpy as np
 from modopt.signal.wavelet import get_mr_filters, filter_convolve
+from joblib import Parallel, delayed
 
+class PyWaveletMultiChannel(PyWaveletTransformBase):
+    """ This holds a general abstracted Wavelet Interface to wavelet Transforms, applied to MultiChannel Case
+    """
+    def __init__(self, nb_scale, verbose=0, dim=2, num_channels=1, n_jobs=1,
+                 is_decimated=True, axes=None, padding_mode="zero", **kwargs):
+        """ Initialize the WaveletTransformBase class.
+        Parameters
+        ----------
+        data: ndarray
+            the input data.
+        nb_scale: int
+            the number of scale of the decomposition that includes the
+            approximation scale.
+        verbose: int, default 0
+            control the verbosity level.
+        dim: int, default 2
+            define the data dimension.
+        num_channel: int, default 1
+            defines the number of channels
+        n_jobs: int, default 1
+            defines the default number of sub-processes to do Wavelet Transform
+        is_decimated: bool, default True
+            use a decimated or undecimated transform.
+        axes: list of int, default None
+            axes over which to compute the transform.
+        padding_mode: str, default zero
+            ways to extend the signal when computing the decomposition.
+            See https://pywavelets.readthedocs.io/en/latest/ref/
+            signal-extension-modes.html for more explanations.
+        """
+        # Inheritance
+        PyWaveletTransformBase.__init__(
+            nb_scale, verbose=verbose, dim=dim, is_decimated=is_decimated, axes=axes, padding_mode=padding_mode)
+        self.num_channels = num_channels
+        self.n_jobs = n_jobs
+
+    def _analysis(self, data, **kwargs):
+        # TODO , define the same here
+        #si, ri = zip(*Parallel(n_jobs=n_jobs)(delayed(Project_Curve_Affine_Constraints)(s[(i - 1) * n_segs:i * n_segs, :], C_kin,
+        return 0
+
+    def _synthesis(self, analysis_data, analysis_header):
+        # TODO , do stuff here
+        return 0
+
+    def op(self, data):
+       """ Define the wavelet operator.
+        This method returns the input data convolved with the wavelet filter.
+        Parameters
+        ----------
+        data: ndarray or Image
+            input 2D data array.
+        Returns
+        -------
+        coeffs: ndarray
+            the wavelet coefficients.
+        """
 
 class Wavelet2(object):
     """ The 2D wavelet transform class.
