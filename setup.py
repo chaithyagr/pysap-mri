@@ -26,7 +26,6 @@ Samuel Farrens <samuel.farrens@gmail.com>
 Jean-Luc Starck <jl.stark@cea.fr>
 Philippe Ciuciu <philippe.ciuciu@cea.fr>
 """
-
 # Write setup
 setup(
     name="pysap-mri",
@@ -39,5 +38,14 @@ setup(
     version="0.0.0",
     url="https://github.com/CEA-COSMIC/pysap-mri",
     packages=find_packages(),
+    install_requires=["scipy",
+                     "numpy",
+                     "scikit-learn",
+                     "progressbar2",
+                     "joblib",
+                      "psutil"],
+    dependency_links=['https://github.com/ghisvail/pyNFFT.git'],
+    setup_requires=['pytest-runner', ],
+    tests_require=['pytest>=5.0.1', 'pytest-cov>=2.7.1', 'pytest-pep8'],
     platforms="OS Independent"
 )

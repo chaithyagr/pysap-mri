@@ -34,9 +34,9 @@ from modopt.opt.reweight import cwbReweight
 
 
 def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
-                     nb_scales=4, lambda_init=1.0, max_nb_of_iter=300,
-                     atol=1e-4, metric_call_period=5, metrics={},
-                     verbose=0):
+                     lambda_init=1.0, max_nb_of_iter=300,
+                     metric_call_period=5, metrics={},
+                     verbose=0, **lambda_update_params):
     """ The FISTA sparse reconstruction without reweightings.
 
     .. note:: At the moment, tested only with 2D data.
@@ -52,15 +52,11 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
     cost_op: instance of costObj
         the cost function used to check for convergence during the
         optimization.
-    nb_scales: int, default 4
-        the number of scales in the wavelet decomposition.
     lambda_init: float, (default 1.0)
         initial value for the FISTA step.
     max_nb_of_iter: int (optional, default 300)
         the maximum number of iterations in the Condat-Vu proximal-dual
         splitting algorithm.
-    atol: float (optional, default 1e-4)
-        tolerance threshold for convergence.
     metric_call_period: int (default 5)
         the period on which the metrics are compute.
     metrics: dict (optional, default None)
@@ -68,6 +64,9 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         [@metric, metric_parameter]}. See modopt for the metrics API.
     verbose: int (optional, default 0)
         the verbosity level.
+    lambda_update_params: dict,
+        Parameters for the lambda update in FISTA mode
+
 
     Returns
     -------
@@ -100,6 +99,14 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         print(" - alpha variable shape: ", alpha.shape)
         print("-" * 40)
 
+    beta_param = gradient_op.inv_spec_rad
+    if lambda_update_params.get("restart_strategy") == "greedy":
+        lambda_update_params["min_beta"] = gradient_op.inv_spec_rad
+        # this value is the recommended one by J. Liang in his article
+        # when introducing greedy FISTA.
+        # ref: https://arxiv.org/pdf/1807.04005.pdf
+        beta_param *= 1.3
+
     # Define the optimizer
     opt = ForwardBackward(
         x=alpha,
@@ -110,7 +117,9 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
         metric_call_period=metric_call_period,
         metrics=metrics,
         linear=linear_op,
-        beta_param=gradient_op.inv_spec_rad)
+        lambda_param=lambda_init,
+        beta_param=beta_param,
+        **lambda_update_params)
     cost_op = opt._cost_func
 
     # Perform the reconstruction
