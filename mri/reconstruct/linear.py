@@ -122,11 +122,10 @@ class WaveletN(object):
         else:
             i = 1
             image = self._adj_op(coeffs[i], self.coeffs_shape[i])
-            image = \
-                zip(*Parallel(n_jobs=self.n_cpu)
-                    (delayed(self._adj_op)
-                    (coeffs[i], self.coeffs_shape[i])
-                    for i in numpy.arange(self.num_channels)))
+            image = Parallel(n_jobs=self.n_cpu)(
+                delayed(self._adj_op)
+                (coeffs[i], self.coeffs_shape[i])
+                for i in numpy.arange(self.num_channels))
             image = numpy.asarray(image)
         if dtype == "array":
             return image.data

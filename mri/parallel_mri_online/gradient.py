@@ -151,7 +151,7 @@ class Grad2D_pMRI_synthesis(GradBasic, PowerMethod):
         """
         rsl = []
         images = self.linear_op.adj_op(x)
-        [rsl.append(self.fourier_op.op(images[channel]))
+        rsl = [self.fourier_op.op(images[channel])
             for channel in range(x.shape[0])]
         return np.asarray(rsl)
 

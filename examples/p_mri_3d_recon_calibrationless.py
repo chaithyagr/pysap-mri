@@ -149,8 +149,7 @@ if __name__ == "__main__":
 
     currentDT = datetime.datetime.now()
     pkl.dump((x_final, cost), open("/neurospin/optimed/Chaithya/Results/MANIAC/"
-            + "Thresh_" + str(thresh) + "-FFT_" + fourier
-            + "-Opt_sparseRecFista" + "-NIt_" + str(max_iter)
+            + "calibrationless_" + file_name
             + "-N_" + str(N) + "-Nz" + str(Nz) + "-D" + str(currentDT.day) + "M"
             + str(currentDT.month) + "Y" + str(currentDT.year)
             + str(currentDT.hour) + ":" + str(currentDT.minute)
