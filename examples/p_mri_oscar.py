@@ -19,11 +19,12 @@ We also add some gaussian noise in the image space.
 import pysap
 from pysap.data import get_sample_data
 import mri.reconstruct.linear as linear_operators
+from mri.parallel_mri.cost import GenericCost
 from modopt.opt.cost import costObj
 from mri.reconstruct.fourier import FFT2
 from mri.reconstruct.fourier import NFFT
 from mri.parallel_mri_online.proximity import OWL
-from mri.parallel_mri_online.gradient import Grad2D_pMRI
+from mri.parallel_mri_online.gradient import Gradient_pMRI_calibrationless
 from mri.reconstruct.utils import convert_mask_to_locations
 from mri.numerics.reconstruct import sparse_rec_fista
 
@@ -81,17 +82,16 @@ max_iter = 150
 
 linear_op = linear_operators.WaveletN(wavelet_name='db4', nb_scale=4,
                                       num_channels=kspace_data.shape[0],
-                                      n_cpu=8)
+                                      n_cpu=1)
 
 if cartesian_reconstruction:
-    fourier_op = FFT2(samples=kspace_loc, shape=(512, 512))
+    fourier_op = FFT2(samples=kspace_loc, shape=(128, 128))
 else:
-    fourier_op = NFFT(samples=kspace_loc, shape=(512, 512))
+    fourier_op = NFFT(samples=kspace_loc, shape=(128, 128))
 
-gradient_op_cd = Grad2D_pMRI(data=kspace_data,
+gradient_op_cd = Gradient_pMRI_calibrationless(data=kspace_data,
                              fourier_op=fourier_op,
                              linear_op=linear_op)
-
 mu_value = 1e-5
 beta = 1e-15
 prox_op = OWL(mu_value,
@@ -99,12 +99,20 @@ prox_op = OWL(mu_value,
               mode='band_based',
               bands_shape=linear_op.coeffs_shape,
               n_channel=32)
-
+cost_synthesis = GenericCost(
+        gradient_op=gradient_op_cd,
+        prox_op=prox_op,
+        initial_cost=1e6,
+        tolerance=1e-4,
+        cost_interval=1,
+        test_range=4,
+        verbose=5,
+        plot_output=None)
 x_final, y_final, cost, metrics = sparse_rec_fista(
     gradient_op=gradient_op_cd,
     linear_op=linear_op,
     prox_op=prox_op,
-    cost_op=costObj([gradient_op_cd, prox_op]),
+    cost_op=cost_synthesis,
     lambda_init=0.0,
     max_nb_of_iter=max_iter,
     atol=0e-4,

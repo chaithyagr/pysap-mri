@@ -80,7 +80,7 @@ def sparse_rec_fista(gradient_op, linear_op, prox_op, cost_op,
 
     # Define the initial primal and dual solutions
     x_init = np.array([])
-    if linear_op.multichannel:
+    if linear_op.num_channels > 1:
         # Use shape of Observed data and not Fourier Shape for MultiChannel
         x_init = np.zeros((gradient_op.obs_data.shape[0],
                        *gradient_op.fourier_op.shape), dtype=np.complex)
@@ -214,7 +214,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
 
     # Define the initial primal and dual solutions
     x_init = np.array([])
-    if linear_op.multichannel:
+    if linear_op.num_channels > 1:
         # Use shape of Observed data and not Fourier Shape for MultiChannel
         x_init = np.zeros((gradient_op.obs_data.shape[0],
                            *gradient_op.fourier_op.shape), dtype=np.complex)
@@ -229,7 +229,7 @@ def sparse_rec_condatvu(gradient_op, linear_op, prox_dual_op, cost_op,
     # Case1: estimate the noise std in the image domain
     if std_est_method == "primal":
         if std_est is None:
-            if linear_op.multichannel:
+            if linear_op.num_channels > 1:
                 std_est = []
                 for channel in np.arange(gradient_op.obs_data.shape[0]):
                     std_est.append(sigma_mad(gradient_op.fourier_op.adj_op(gradient_op.obs_data[channel])))
