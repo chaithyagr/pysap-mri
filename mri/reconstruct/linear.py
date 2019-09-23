@@ -97,7 +97,7 @@ class WaveletN(object):
     def _adj_op(self, coeffs, coeffs_shape):
         self.transform.analysis_data = unflatten(coeffs, coeffs_shape)
         image = self.transform.synthesis()
-        return image
+        return image.data
 
     def adj_op(self, coeffs, dtype="array"):
         """ Define the wavelet adjoint operator.
@@ -121,14 +121,11 @@ class WaveletN(object):
             image = self._adj_op(coeffs, self.coeffs_shape)
         else:
             i = 1
-            image = self._adj_op(coeffs[i], self.coeffs_shape[i])
             image = Parallel(n_jobs=self.n_cpu)(
                 delayed(self._adj_op)
                 (coeffs[i], self.coeffs_shape[i])
                 for i in numpy.arange(self.num_channels))
             image = numpy.asarray(image)
-        if dtype == "array":
-            return image.data
         return image
 
     def l2norm(self, shape):

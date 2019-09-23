@@ -226,10 +226,10 @@ class Gradient_pMRI_calibrationless(Grad2D_pMRI_analysis, Grad2D_pMRI_synthesis)
             else:
                 print('The lipschitz constraint is satisfied')
 
-    def cost(self, x):
-        """ Gettng the cost.
+    def get_cost(self, x):
+        """ Gettng the get_cost.
 
-        This method calculates the cost function of the differentiable part of
+        This method calculates the get_cost function of the differentiable part of
         the objective function.
 
         Parameters

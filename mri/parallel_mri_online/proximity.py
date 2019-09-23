@@ -62,16 +62,16 @@ class ElasticNet(object):
                                                   extra_factor),
                           data.shape)
 
-    def cost(self, data):
+    def get_cost(self, data):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
         return self.weights_lasso * np.sum(np.abs(data.flatten())) + \
                self.weights_ridge * np.sqrt(np.sum(np.abs(data.flatten())**2))
@@ -126,7 +126,7 @@ class NuclearNorm(object):
             patch.shape)
         return patch
 
-    def _nuclear_norm_cost(self, patch):
+    def _nuclear_norm_get_cost(self, patch):
         _, s, _ = np.linalg.svd(np.reshape(
             patch,
             (np.prod(patch.shape[:-1]), patch.shape[-1])),
@@ -226,22 +226,22 @@ class NuclearNorm(object):
                 output.append(r_coeffs)
             return np.asarray(output)
 
-    def cost(self, data, extra_factor=1.0):
+    def get_cost(self, data, extra_factor=1.0):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
-        cost = 0
+        get_cost = 0
         threshold = self.weights * extra_factor
         if self.mode == "image":
             if data.shape[1:] == self.patch_shape:
-                cost += self._nuclear_norm_cost(patch=np.reshape(
+                get_cost += self._nuclear_norm_get_cost(patch=np.reshape(
                     np.moveaxis(data, 0, -1),
                     (np.prod(self.patch_shape), data.shape[0])))
             elif self.overlapping_factor == 1:
@@ -249,21 +249,21 @@ class NuclearNorm(object):
                                        self.patch_shape,
                                        overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
-                cost_list = Parallel(n_jobs=self.num_cores)(delayed(
-                    self._cost_nuclear_norm)(
+                get_cost_list = Parallel(n_jobs=self.num_cores)(delayed(
+                    self._get_cost_nuclear_norm)(
                         patch=P[idx, :, :, :]
                         ) for idx in range(number_of_patches))
-                cost = np.asarray(cost_list).sum()
+                get_cost = np.asarray(get_cost_list).sum()
             else:
                 P = extract_patches_2d(np.moveaxis(data, 0, -1), self.patch_shape,
                                        overlapping_factor=self.overlapping_factor)
                 number_of_patches = P.shape[0]
                 threshold = self.weights * extra_factor
-                cost_list = Parallel(n_jobs=self.num_cores)(delayed(
-                    self._nuclear_norm_cost)(
+                get_cost_list = Parallel(n_jobs=self.num_cores)(delayed(
+                    self._nuclear_norm_get_cost)(
                             patch=P[idx, :, :, :])
                             for idx in range(number_of_patches))
-                cost = np.asarray(cost_list).sum()
+                get_cost = np.asarray(get_cost_list).sum()
         elif self.mode == "sparse":
             coeffs = [self.linear_op.unflatten(
                       data[ch],
@@ -276,12 +276,12 @@ class NuclearNorm(object):
                     tmp.append(coeffs[ch][coeff_idx])
                 reordered_coeffs.append(np.moveaxis(np.asarray(tmp), 0, -1))
             number_of_patches = len(reordered_coeffs)
-            cost_list = Parallel(n_jobs=self.num_cores)(delayed(
-                self._nuclear_norm_cost)(
+            get_cost_list = Parallel(n_jobs=self.num_cores)(delayed(
+                self._nuclear_norm_get_cost)(
                             patch=reordered_coeffs[idx])
                             for idx in range(number_of_patches))
-            cost = np.asarray(cost_list).sum()
-        return cost * threshold
+            get_cost = np.asarray(get_cost_list).sum()
+        return get_cost * threshold
 
 
 class GroupLasso(object):
@@ -316,16 +316,16 @@ class GroupLasso(object):
         return data * np.maximum(0, 1.0 - self.weights*extra_factor /
                                  np.maximum(norm_2, np.finfo(np.float32).eps))
 
-    def cost(self, data):
+    def get_cost(self, data):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
         return np.sum(np.linalg.norm(data, axis=0))
 
@@ -369,18 +369,18 @@ class SparseGroupLasso(SparseThreshold, GroupLasso):
                                     extra_factor=extra_factor),
                                     extra_factor=extra_factor)
 
-    def cost(self, data):
+    def get_cost(self, data):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
-        return self.prox_op_l1.cost(data) + self.prox_op_l2.cost(data)
+        return self.prox_op_l1.get_cost(data) + self.prox_op_l2.get_cost(data)
 
 
 class OWL(object):
@@ -461,7 +461,7 @@ class OWL(object):
             start = stop
         return output
 
-    def _prox_OWL_cost(self, data, weights):
+    def _prox_OWL_get_cost(self, data, weights):
         """Cost function of OWL
         :param Data : ndArray, holds array of observed data"""
         # Sort the data
@@ -500,30 +500,30 @@ class OWL(object):
                         threshold=threshold) for idx in range(data.shape[1]))
         return np.asarray(output).T
 
-    def cost(self, data):
+    def get_cost(self, data):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
         if self.mode is 'all':
-            cost = self._prox_OWL_cost(data, self.weights)
+            get_cost = self._prox_OWL_get_cost(data, self.weights)
         elif self.mode is 'band_based':
             data_r = self._reshape_mode_based(data)
-            cost = 0
+            get_cost = 0
             for data_band, weights in zip(data_r, self.weights):
-                cost = cost + self._prox_OWL_cost(data_band, weights)
-            cost = 0
+                get_cost = get_cost + self._prox_OWL_get_cost(data_band, weights)
+            get_cost = 0
         elif self.mode is 'coeff_based':
-            cost = 0
+            get_cost = 0
             for idx in range(data.shape[1]):
-                cost = cost + self._prox_OWL_cost(np.squeeze(data[:, idx]), self.weights)
-        return cost
+                get_cost = get_cost + self._prox_OWL_get_cost(np.squeeze(data[:, idx]), self.weights)
+        return get_cost
 
 
 class k_support_norm(object):
@@ -783,16 +783,16 @@ class k_support_norm(object):
                     first_idx = q
         return q
 
-    def cost(self, data):
+    def get_cost(self, data):
         """Cost function
-        This method calculate the cost function of the proximable part.
+        This method calculate the get_cost function of the proximable part.
         Parameters
         ----------
         x: np.ndarray
             Input array of the sparse code.
         Returns
         -------
-        The cost of this sparse code
+        The get_cost of this sparse code
         """
         data_abs = np.abs(data.flatten())
         ix = np.argsort(data_abs)[::-1]
