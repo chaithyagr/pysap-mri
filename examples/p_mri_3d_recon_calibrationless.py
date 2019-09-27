@@ -115,7 +115,7 @@ if __name__ == "__main__":
                                 fourier_op=fourier_op,
                                 linear_op=linear_op,
                                 max_iter=10,
-                                check_lips=True)
+                                check_lips=False)
     prox_op = Threshold(mu)
     cost_synthesis = GenericCost(
         gradient_op=gradient_op,
@@ -144,7 +144,6 @@ if __name__ == "__main__":
         lambda_init=0.0,
         max_nb_of_iter=max_iter,
         atol=1e-4,
-        is_multichannel=True,
         verbose=1)
 
     currentDT = datetime.datetime.now()
