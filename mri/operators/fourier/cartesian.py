@@ -19,6 +19,7 @@ import numpy as np
 from ..base import OperatorBase
 from .utils import convert_locations_to_mask
 from modopt.interface.errors import warn
+from modopt.base.backend import get_array_module, move_to_device
 
 # Third party import
 try:
@@ -87,9 +88,12 @@ class FFT(OperatorBase):
             masked Fourier transform of the input image. For multichannel
             images the coils dimension is put first
         """
+        xp = get_array_module(img)
+        if xp != np and get_array_module(self._mask) == np:
+            self._mask = move_to_device(self._mask)
         if self.n_coils == 1:
-            return self._mask * np.fft.ifftshift(np.fft.fftn(
-                                    np.fft.fftshift(img), norm="ortho"))
+            return self._mask * xp.fft.ifftshift(np.fft.fftn(
+                                    xp.fft.fftshift(img), norm="ortho"))
         else:
             if self.n_coils > 1 and self.n_coils != img.shape[0]:
                 raise ValueError("The number of coils parameter is not equal"
@@ -97,8 +101,8 @@ class FFT(OperatorBase):
                                  "be reshaped as [n_coils, Nx, Ny, Nz]")
             else:
                 # TODO: Use joblib for parallelization
-                return np.asarray([self._mask * np.fft.ifftshift(np.fft.fftn(
-                                    np.fft.fftshift(img[ch]), norm="ortho"))
+                return np.asarray([self._mask * xp.fft.ifftshift(np.fft.fftn(
+                                    xp.fft.fftshift(img[ch]), norm="ortho"))
                                    for ch in range(self.n_coils)])
 
     def adj_op(self, x):
@@ -117,9 +121,12 @@ class FFT(OperatorBase):
             inverse ND discrete Fourier transform of the input coefficients.
             For multichannel images the coils dimension is put first
         """
+        xp = get_array_module(x)
+        if xp != np and get_array_module(self._mask) == np:
+            self._mask = move_to_device(self._mask)
         if self.n_coils == 1:
-            return np.fft.fftshift(np.fft.ifftn(
-                        np.fft.ifftshift(self._mask * x), norm="ortho"))
+            return xp.fft.fftshift(np.fft.ifftn(
+                        xp.fft.ifftshift(self._mask * x), norm="ortho"))
         else:
             if self.n_coils > 1 and self.n_coils != x.shape[0]:
                 raise ValueError("The number of coils parameter is not equal"
@@ -127,7 +134,7 @@ class FFT(OperatorBase):
                                  "be reshaped as [n_coils, Nx, Ny, Nz]")
             else:
                 # TODO: Use joblib for parallelization
-                return np.asarray([np.fft.fftshift(np.fft.ifftn(
+                return xp.asarray([np.fft.fftshift(np.fft.ifftn(
                                         np.fft.ifftshift(self._mask * x[ch]),
                                         norm="ortho"))
                                    for ch in range(self.n_coils)])

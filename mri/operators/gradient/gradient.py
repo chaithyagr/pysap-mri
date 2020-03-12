@@ -16,6 +16,7 @@ from .base import GradBaseMRI
 
 # Third party import
 import numpy as np
+from modopt.base.backend import get_array_module, move_to_device
 
 
 class GradAnalysis(GradBaseMRI):
@@ -158,11 +159,15 @@ class GradSelfCalibrationSynthesis(GradBaseMRI):
 
     def _op_method(self, coeff):
         image = self.linear_op.adj_op(coeff)
-        image_per_ch = np.asarray([image * self.Smaps[ch]
+        xp = get_array_module(image)
+        image_per_ch = xp.asarray([image * self.Smaps[ch]
                                    for ch in range(self.Smaps.shape[0])])
         return self.fourier_op.op(image_per_ch)
 
     def _trans_op_method(self, data):
         data_per_ch = self.fourier_op.adj_op(data)
-        image_recon = np.sum(data_per_ch * np.conjugate(self.Smaps), axis=0)
+        xp = get_array_module(self.Smaps)
+        if xp != np:
+            data_per_ch = move_to_device(data_per_ch)
+        image_recon = xp.sum(data_per_ch * xp.conj(self.Smaps), axis=0)
         return self.linear_op.op(image_recon)

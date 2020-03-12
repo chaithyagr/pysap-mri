@@ -19,6 +19,8 @@ from ..operators import GradSelfCalibrationSynthesis, \
     GradSelfCalibrationAnalysis, WaveletN
 from .utils.extract_sensitivity_maps import get_Smaps
 
+from modopt.base.backend import move_to_device
+
 
 class SelfCalibrationReconstructor(ReconstructorBase):
     """ Self Calibrating reconstruction for multi-channel acquisition.
@@ -205,6 +207,8 @@ class SelfCalibrationReconstructor(ReconstructorBase):
                 method=self.smaps_gridding_method,
                 n_cpu=self.n_jobs
             )
+            if self.use_gpu:
+                Smaps = move_to_device(Smaps)
             self.set_smaps(Smaps)
         # Start Reconstruction
         super(SelfCalibrationReconstructor, self).reconstruct(

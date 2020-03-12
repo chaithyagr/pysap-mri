@@ -74,13 +74,14 @@ class ReconstructorBase(object):
 
     def __init__(self, fourier_op, linear_op, regularizer_op,
                  gradient_formulation, grad_class, init_gradient_op=True,
-                 verbose=0, **extra_grad_args):
+                 verbose=0, use_gpu=False, **extra_grad_args):
         self.fourier_op = fourier_op
         self.linear_op = linear_op
         self.prox_op = regularizer_op
         self.gradient_method = gradient_formulation
         self.grad_class = grad_class
         self.verbose = verbose
+        self.use_gpu = use_gpu
         self.extra_grad_args = extra_grad_args
         if regularizer_op is None:
             warnings.warn("The prox_op is not set. Setting to identity. "
@@ -147,6 +148,7 @@ class ReconstructorBase(object):
                 max_nb_of_iter=num_iterations,
                 x_init=x_init,
                 verbose=self.verbose,
+                use_gpu=self.use_gpu,
                 **kwargs)
         if optimization_alg == 'condatvu':
             self.metrics, self.y_final = metrics

@@ -19,6 +19,7 @@ import numpy as np
 from ..base import OperatorBase
 from .utils import normalize_frequency_locations, get_stacks_fourier
 from modopt.interface.errors import warn
+from modopt.base.backend import get_array_module, move_to_cpu
 
 # Third party import
 try:
@@ -497,7 +498,7 @@ class gpuNUFFT:
 
 class NonCartesianFFT(OperatorBase):
     """This class wraps around different implementation algorithms for NFFT"""
-    def __init__(self, samples, shape, implementation='cpu', n_coils=1):
+    def __init__(self, samples, shape, implementation='cpu', n_coils=1, **kwargs):
         """ Initialize the class.
 
         Parameters
@@ -527,7 +528,7 @@ class NonCartesianFFT(OperatorBase):
                                         n_coils=self.n_coils)
         elif implementation == 'gpuNUFFT':
             self.implementation = gpuNUFFT(samples=samples, shape=shape,
-                                           n_coils=self.n_coils)
+                                           n_coils=self.n_coils, **kwargs)
         else:
             raise ValueError('Bad implementation ' + implementation +
                              ' chosen. Please choose between "cpu" | "cuda" |'
@@ -546,6 +547,10 @@ class NonCartesianFFT(OperatorBase):
         -------
             masked Fourier transform of the input image.
         """
+        xp = get_array_module(data)
+        if xp != np:
+            warnings.warn('Moving data to CPU from GPU for fourier')
+            data = move_to_cpu(data)
         return self.implementation.op(data)
 
     def adj_op(self, coeffs):
@@ -561,6 +566,10 @@ class NonCartesianFFT(OperatorBase):
         -------
             inverse discrete Fourier transform of the input coefficients.
         """
+        xp = get_array_module(coeffs)
+        if xp != np:
+            warnings.warn('Moving data to CPU from GPU for fourier')
+            coeff = move_to_cpu(coeffs)
         return self.implementation.adj_op(coeffs)
 
 
@@ -649,6 +658,10 @@ class Stacked3DNFFT(OperatorBase):
         result: np.ndarray
             Forward 3D Fourier transform of the image.
         """
+        xp = get_array_module(data)
+        if xp != np:
+            warnings.warn('Moving data to CPU from GPU for fourier')
+            data = move_to_cpu(data)
         if self.n_coils == 1:
             coeff = self._op(np.squeeze(data))
         else:
@@ -689,6 +702,10 @@ class Stacked3DNFFT(OperatorBase):
         img: np.ndarray
             inverse 3D discrete Fourier transform of the input coefficients.
         """
+        xp = get_array_module(coeff)
+        if xp != np:
+            warnings.warn('Moving data to CPU from GPU for fourier')
+            coeff = move_to_cpu(coeff)
         if self.n_coils == 1:
             img = self._adj_op(np.squeeze(coeff))
         else:
