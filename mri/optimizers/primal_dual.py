@@ -27,7 +27,7 @@ from modopt.opt.reweight import cwbReweight
 def condatvu(gradient_op, linear_op, dual_regularizer, cost_op,
              max_nb_of_iter=150, tau=None, sigma=None, relaxation_factor=1.0,
              x_init=None, std_est=None, std_est_method=None, std_thr=2.,
-             nb_of_reweights=1, metric_call_period=5, metrics={}, verbose=0):
+             nb_of_reweights=1, metric_call_period=5, metrics={}, verbose=0, **kwargs):
     """ The Condat-Vu sparse reconstruction with reweightings.
 
     Parameters
@@ -177,7 +177,8 @@ def condatvu(gradient_op, linear_op, dual_regularizer, cost_op,
         tau_update=None,
         auto_iterate=False,
         metric_call_period=metric_call_period,
-        metrics=metrics)
+        metrics=metrics,
+        **kwargs)
     cost_op = opt._cost_func
 
     # Perform the first reconstruction
