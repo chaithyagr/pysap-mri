@@ -27,7 +27,7 @@ import scipy.fftpack as pfft
 
 def extract_k_space_center_and_locations(data_values, samples_locations,
                                          thr=None, img_shape=None,
-                                         is_fft=False):
+                                         is_fft=False, density_comp=None):
     """
     This class extract the k space center for a given threshold and extracts
     the corresponding sampling locations
@@ -76,12 +76,14 @@ def extract_k_space_center_and_locations(data_values, samples_locations,
         index = np.extract(condition, index)
         center_locations = samples_locations[index, :]
         data_thresholded = data_ordered[:, index]
-    return data_thresholded, center_locations
+        if density_comp is not None:
+            density_comp = density_comp[index]
+    return data_thresholded, center_locations, density_comp
 
 
 def get_Smaps(k_space, img_shape, samples, thresh,
               min_samples, max_samples, mode='Gridding',
-              method='linear', n_cpu=1):
+              method='linear', density_comp=None, n_cpu=1):
     """
     This method estimate the sensitivity maps information from parallel mri
     acquisition and for variable density sampling scheme where teh k-space
@@ -127,13 +129,15 @@ def get_Smaps(k_space, img_shape, samples, thresh,
             or len(thresh) != len(img_shape):
         raise NameError('The img_shape, max_samples, '
                         'min_samples and thresh must be of same length')
-    k_space, samples = \
+    k_space, samples, density_comp = \
         extract_k_space_center_and_locations(
             data_values=k_space,
             samples_locations=samples,
             thr=thresh,
             img_shape=img_shape,
-            is_fft=mode == 'FFT')
+            is_fft=mode == 'FFT',
+            density_comp=density_comp,
+        )
     if samples is None:
         mode = 'FFT'
     L, M = k_space.shape
@@ -149,8 +153,8 @@ def get_Smaps(k_space, img_shape, samples, thresh,
             Smaps[l] = pfft.ifftshift(pfft.ifft2(pfft.fftshift(k_space[l])))
     elif mode == 'NFFT':
         fourier_op = NonCartesianFFT(samples=samples, shape=img_shape,
-                                     implementation='cpu')
-        Smaps = np.asarray([fourier_op.adj_op(k_space[l]) for l in range(L)])
+                                     implementation='gpuNUFFT', density_comp=density_comp, n_coils=L)
+        Smaps = fourier_op.adj_op(np.ascontiguousarray(k_space))
     elif mode == 'Stack':
         grid_space = [np.linspace(min_samples[i],
                                   max_samples[i],
