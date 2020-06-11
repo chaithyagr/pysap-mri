@@ -404,8 +404,8 @@ class gpuNUFFT:
             receiver coils acquisition. If n_coils > 1, please organize data as
             n_coils X data_per_coil
     """
-    def __init__(self, samples, shape, n_coils=1, density_comp=None,
-                 kernel_width=3, sector_width=8, osf=2, balance_workload=True,
+    def __init__(self, samples, shape, n_coils=1, kernel_width=3,
+                 sector_width=8, osf=2, balance_workload=True,
                  smaps=None):
         """ Initilize the 'NUFFT' class.
 
@@ -444,8 +444,6 @@ class gpuNUFFT:
             warnings.warn("Samples will be normalized between [-0.5; 0.5[")
             samples = normalize_frequency_locations(samples)
             self.samples = samples
-        if density_comp is None:
-            density_comp = np.ones(samples.shape[0])
         if smaps is None:
             self.uses_sense = False
         else:
@@ -458,7 +456,7 @@ class gpuNUFFT:
             shape,
             n_coils,
             smaps,
-            density_comp,
+            np.ones(samples.shape[0]),
             kernel_width,
             sector_width,
             osf,
@@ -524,7 +522,7 @@ class gpuNUFFT:
 class NonCartesianFFT(OperatorBase):
     """This class wraps around different implementation algorithms for NFFT"""
     def __init__(self, samples, shape, implementation='cpu', n_coils=1,
-                 **kwargs):
+                 density_comp=None, **kwargs):
         """ Initialize the class.
 
         Parameters
@@ -547,6 +545,7 @@ class NonCartesianFFT(OperatorBase):
         self.shape = shape
         self.samples = samples
         self.n_coils = n_coils
+        self.density_comp = density_comp
         if implementation == 'cpu':
             self.implementation = NFFT(samples=samples, shape=shape,
                                        n_coils=self.n_coils)
@@ -601,8 +600,11 @@ class NonCartesianFFT(OperatorBase):
         xp = get_array_module(coeffs)
         if xp != np:
             warnings.warn('Moving data to CPU from GPU for fourier')
-            coeff = move_to_cpu(coeffs)
-        return self.implementation.adj_op(coeffs, *args)
+            coeffs = move_to_cpu(coeffs)
+        if self.density_comp is not None:
+            return self.implementation.adj_op(coeffs * self.density_comp, *args)
+        else:
+            return self.implementation.adj_op(coeffs, *args)
 
 
 class Stacked3DNFFT(OperatorBase):
