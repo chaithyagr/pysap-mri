@@ -149,5 +149,5 @@ class GenericCost(costObj):
             # TODO, we need to generalize this
             cost = self.gradient_op.cost(x_new) + self.prox_op.cost(args[0])
         else:
-            cost = self.gradient_op.cost(args[0]) #+ self.prox_op.cost(x_new)
+            cost = self.gradient_op.cost(args[0]) + self.prox_op.cost(x_new)
         return cost
