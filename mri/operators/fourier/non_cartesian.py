@@ -28,12 +28,13 @@ except Exception:
     warnings.warn("pynfft python package has not been found. If needed use "
                   "the master release.")
     pass
+pynufft_available = False
 try:
     from pynufft import NUFFT_hsa, NUFFT_cpu
 except Exception:
-    warnings.warn("pynufft python package has not been found. If needed use "
-                  "the master release. Till then you cannot use NUFFT on GPU")
     pass
+else:
+    pynufft_available = True
 
 gpunufft_available = False
 try:
@@ -237,6 +238,10 @@ class NUFFT(Singleton):
         """
         if (n_coils < 1) or (type(n_coils) is not int):
             raise ValueError('The number of coils should be an integer >= 1')
+        if not pynufft_available:
+            raise ValueError('PyNUFFT Package is not installed, please '
+                             'consider using `gpuNUFFT` or install the '
+                             'PyNUFFT package')
         self.nb_coils = n_coils
         self.shape = shape
         self.platform = platform
@@ -473,6 +478,9 @@ class gpuNUFFT:
         ----------
         image: np.ndarray
             input array with the same shape as shape.
+        interpolate_data: bool, default False
+            if set to True, the image is just apodized and interpolated to
+            kspace locations. This is used for density estimation.
 
         Returns
         -------
@@ -487,7 +495,10 @@ class gpuNUFFT:
                 [np.reshape(image_ch.T, image_ch.size) for image_ch in image]
             ).T, interpolate_data)
         else:
-            coeff = self.operator.op(np.reshape(image.T, image.size), interpolate_data)
+            coeff = self.operator.op(
+                np.reshape(image.T, image.size),
+                interpolate_data
+            )
             # Data is always returned as num_channels X coeff_array,
             # so for single channel, we extract single array
             if not self.uses_sense:
@@ -502,7 +513,9 @@ class gpuNUFFT:
         ----------
         coeff: np.ndarray
             masked non-uniform Fourier transform 1D data.
-
+        grid_data: bool, default False
+            if True, the kspace data is gridded and returned,
+            this is used for density compensation
         Returns
         -------
         np.ndarray
@@ -524,7 +537,7 @@ class gpuNUFFT:
 class NonCartesianFFT(OperatorBase):
     """This class wraps around different implementation algorithms for NFFT"""
     def __init__(self, samples, shape, implementation='cpu', n_coils=1,
-                 **kwargs):
+                 density_comp=None, **kwargs):
         """ Initialize the class.
 
         Parameters
@@ -548,9 +561,11 @@ class NonCartesianFFT(OperatorBase):
         self.samples = samples
         self.n_coils = n_coils
         if implementation == 'cpu':
+            self.density_comp = density_comp
             self.implementation = NFFT(samples=samples, shape=shape,
                                        n_coils=self.n_coils)
         elif implementation == 'cuda' or implementation == 'opencl':
+            self.density_comp = density_comp
             self.implementation = NUFFT(samples=samples, shape=shape,
                                         platform=implementation,
                                         n_coils=self.n_coils)
@@ -559,8 +574,13 @@ class NonCartesianFFT(OperatorBase):
                 raise ValueError('gpuNUFFT library is not installed, '
                                  'please refer to README'
                                  'or use cpu for implementation')
-            self.implementation = gpuNUFFT(samples=samples, shape=shape,
-                                           n_coils=self.n_coils, **kwargs)
+            self.implementation = gpuNUFFT(
+                samples=samples,
+                shape=shape,
+                n_coils=self.n_coils,
+                density_comp=density_comp,
+                **kwargs
+            )
         else:
             raise ValueError('Bad implementation ' + implementation +
                              ' chosen. Please choose between "cpu" | "cuda" |'
