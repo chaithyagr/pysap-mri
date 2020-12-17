@@ -19,7 +19,8 @@ import numpy as np
 from ..base import OperatorBase
 from .utils import convert_locations_to_mask
 from modopt.interface.errors import warn
-from modopt.base.backend import get_array_module, move_to_device
+from modopt.base.backend import get_array_module, move_to_cpu, \
+    move_to_device
 
 # Third party import
 try:
@@ -106,7 +107,9 @@ class FFT(OperatorBase):
                                  "be reshaped as [n_coils, Nx, Ny, Nz]")
             else:
                 axes = tuple(np.arange(1, img.ndim))
-                return self.mask * self.xp.fft.ifftshift(
+                if self.xp != np:
+                    img = move_to_device(img)
+                return move_to_cpu(self.mask * self.xp.fft.ifftshift(
                     self.xp.fft.fftn(
                         self.xp.fft.fftshift(
                             img,
@@ -116,7 +119,7 @@ class FFT(OperatorBase):
                         norm="ortho",
                     ),
                     axes=axes
-                )
+                ))
 
     def adj_op(self, x):
         """ This method calculates inverse masked Fourier transform of a ND
@@ -143,9 +146,11 @@ class FFT(OperatorBase):
                                  "to the actual number of coils, the data must"
                                  "be reshaped as [n_coils, Nx, Ny, Nz]")
             else:
+                if self.xp != np:
+                    x = move_to_device(x)
                 x = x * self.mask
                 axes = tuple(np.arange(1, x.ndim))
-                return self.xp.fft.fftshift(
+                return move_to_cpu(self.xp.fft.fftshift(
                     self.xp.fft.ifftn(
                         self.xp.fft.ifftshift(
                             x,
@@ -155,4 +160,4 @@ class FFT(OperatorBase):
                         norm="ortho",
                     ),
                     axes=axes
-                )
+                ))
