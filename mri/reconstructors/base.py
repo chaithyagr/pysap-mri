@@ -17,6 +17,7 @@ from ..optimizers.utils.cost import GenericCost
 
 # Third party import
 from modopt.opt.linear import Identity
+import numpy as np
 
 
 class ReconstructorBase(object):
@@ -74,7 +75,7 @@ class ReconstructorBase(object):
 
     def __init__(self, fourier_op, linear_op, regularizer_op,
                  gradient_formulation, grad_class, init_gradient_op=True,
-                 verbose=0, **extra_grad_args):
+                 verbose=0, force_linear_op=False, **extra_grad_args):
         self.fourier_op = fourier_op
         self.linear_op = linear_op
         self.prox_op = regularizer_op
@@ -90,6 +91,13 @@ class ReconstructorBase(object):
         #  rely on static attributes
         # If the reconstruction formulation is synthesis,
         # we send the linear operator as well.
+        if not force_linear_op and (isinstance(self.prox_op, Identity) or
+                                    np.sum(self.prox_op.weights) == 0):
+            # No regularization, lets not do linear operation to save time!
+            new_linear_op = Identity()
+            # This is needed for sanity checks
+            new_linear_op.n_coils = linear_op.n_coils
+            self.linear_op = new_linear_op
         if gradient_formulation == 'synthesis':
             self.extra_grad_args['linear_op'] = self.linear_op
         if init_gradient_op:
