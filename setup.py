@@ -39,7 +39,7 @@ setup(
     description="Python Sparse data Analysis Package external MRI plugin.",
     long_description="Python Sparse data Analysis Package external MRI plugin.",
     license="CeCILL-B",
-    classifiers="CLASSIFIERS",
+    classifiers=CLASSIFIERS,
     author=AUTHOR,
     author_email="XXX",
     version="0.4.0",
