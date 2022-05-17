@@ -77,12 +77,12 @@ reconstructor = CalibrationlessReconstructor(
     fourier_op=fourier_op,
     linear_op=linear_op,
     regularizer_op=regularizer_op,
-    gradient_formulation='synthesis',
+    gradient_formulation='analysis',
     verbose=1,
 )
 x_final, costs, metrics = reconstructor.reconstruct(
     kspace_data=kspace_obs,
-    optimization_alg='fista',
+    optimization_alg='condatvu',
     num_iterations=300,
 )
 image_rec = pysap.Image(data=np.sqrt(np.sum(np.abs(x_final)**2, axis=0)))
