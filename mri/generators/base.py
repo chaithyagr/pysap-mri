@@ -6,6 +6,7 @@ Kspace Generators emulates the acquisition of MRI data, by providing sequential 
 
 import numpy as np
 import progressbar
+from typing import Generator
 
 
 class KspaceGeneratorBase:
@@ -18,14 +19,14 @@ class KspaceGeneratorBase:
 
     Parameters
     ----------
-    full_kspace: np.ndarray
-        The fully sampled kspace, which will be returned incrementally,
-        use for the Fourier transform.
-    mask: np.ndarray
-        A binary mask, giving the sampled location for the kspace
+    kspace_gen: Generator
+        A generator from scanner providing incremental k-space data.
+    
+    fourier_op_gen: np.ndarray
+        A generator having details on k-space locations which are accumulative.
     """
 
-    def __init__(self, full_kspace: np.ndarray, mask: np.ndarray, max_iter: int = 1):
+    def __init__(self, kspace_gen: Generator, fourier_op_gen: Generator, max_gen: int = 1):
         """Create a Basic k-space generator.
 
         Parameters
@@ -37,21 +38,10 @@ class KspaceGeneratorBase:
         max_iter: int
             Maximum number of iterations to be yields.
         """
-        self._full_kspace = full_kspace
-        self.kspace = full_kspace.copy()
-        self.mask = mask
-        self._len = max_iter
+        self._kspace_gen = kspace_gen
+        self._fourier_op_gen = fourier_op_gen
+        self._len = max_gen
         self.iter = 0
-
-    @property
-    def shape(self):
-        """Return shape of full_kspace."""
-        return self._full_kspace.shape
-
-    @property
-    def dtype(self):
-        """Return dtype of full_kspace."""
-        return self._full_kspace.dtype
 
     def __len__(self):
         """The Number of kspace acquisitions available."""
@@ -60,21 +50,13 @@ class KspaceGeneratorBase:
     def __iter__(self):
         return self
 
-    def __getitem__(self, idx):
-        if idx >= self._len:
-            raise IndexError
-        return self._full_kspace, self.mask
-
     def __next__(self):
         if self.iter < self._len:
             self.iter += 1
-            return self._full_kspace, self.mask
+            return next(self._kspace_gen), self._fourier_op_gen
         raise StopIteration
 
-    def reset(self):
-        """Reset the Generator to its initial state."""
-        self.iter = 0
-
+    
     def opt_iterate(self, opt, estimate_call_period=None):
         """Run a optimizer with updates provided by the generator.
 
@@ -99,10 +81,10 @@ class KspaceGeneratorBase:
         x_new_list = []
         #FIXME Modopt Setup Operator does not systematically have idx defined
         opt.idx = 0
-        for (kspace, mask) in progressbar.progressbar(self):
+        for (kspace, fourier_op) in progressbar.progressbar(self):
             opt.idx += 1
             opt._grad.obs_data = kspace
-            opt._grad.fourier_op.mask = mask
+            opt._grad.fourier_op = fourier_op
             opt._update()
             if opt.metrics and opt.metric_call_period is not None:
                 if opt.idx % opt.metric_call_period == 0 or opt.idx == (self._len - 1):

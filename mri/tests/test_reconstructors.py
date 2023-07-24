@@ -432,7 +432,7 @@ class TestReconstructor(unittest.TestCase):
             )
             for regularizer_op in [regularizer_op_gl, regularizer_op_owl]:
                 print(image, nb_scale, optimizer, recon_type, name, regularizer_op)
-                kspace_gen = KspaceGeneratorBase(full_kspace=kspace_data, mask=fourier.mask, max_iter=10)
+                kspace_gen = KspaceGeneratorBase(full_kspace=kspace_data, mask=fourier.mask, max_gen=10)
                 reconstructor = CalibrationlessReconstructor(
                     fourier_op=fourier,
                     linear_op=linear_op,

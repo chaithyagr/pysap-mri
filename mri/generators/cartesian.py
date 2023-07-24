@@ -66,7 +66,7 @@ class Column2DKspaceGenerator(KspaceGeneratorBase):
 
         if max_iter == 0:
             max_iter = len(self.cols)
-        super().__init__(full_kspace, mask, max_iter=max_iter)
+        super().__init__(full_kspace, mask, max_gen=max_iter)
 
     def _getitem_memory(self, idx):
         mask = np.zeros(self.shape[-2:])
