@@ -102,7 +102,7 @@ def normalize_frequency_locations(samples, Kmax=None):
     return samples_locations
 
 
-def discard_frequency_outliers(kspace_loc, kspace_data):
+def discard_frequency_outliers(kspace_loc, kspace_data=None):
     """
     This function discards the samples outside [-0.5; 0.5[ for
     the non-Cartesian case.
@@ -125,9 +125,10 @@ def discard_frequency_outliers(kspace_loc, kspace_data):
     """
     kspace_mask = np.all((kspace_loc < 0.5) & (kspace_loc >= -0.5), axis=-1)
     kspace_loc = kspace_loc[kspace_mask]
-    kspace_data = kspace_data[:, kspace_mask]
-    return np.ascontiguousarray(kspace_loc), np.ascontiguousarray(kspace_data)
-
+    if kspace_data is not None:
+       kspace_data = kspace_data[:, kspace_mask]
+       return np.ascontiguousarray(kspace_loc), np.ascontiguousarray(kspace_data)
+    return np.ascontiguousarray(kspace_loc)
 
 
 def gridded_inverse_fourier_transform_nd(kspace_loc,

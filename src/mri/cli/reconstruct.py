@@ -17,14 +17,14 @@ log = logging.getLogger(__name__)
 save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args, **kwargs)
 
 
-def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int,
+def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int, debug: int,
                obs_reader, traj_reader, fourier, output_filename: str = "dc_adjoint.pkl"):
     """
     Reconstructs an image using the adjoint operator.
 
     Parameters
     ----------
-    obs_file : str
+    obs_file : str or np.ndarray
         Path to the observed kspace data file.
     traj_file : str
         Path to the trajectory file or the folder holding trajectory file.
@@ -138,7 +138,7 @@ def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int
     
 def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, obs_reader, traj_reader, fourier, linear, sparsity,
-          output_filename: str = "recon.pkl"):
+          output_filename: str = "recon.pkl", validation_recon: np.ndarray = None, metrics: dict = None):
     """Reconstructs an MRI image using the given parameters.
 
     Parameters
@@ -169,6 +169,10 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         Object representing the sparsity operator.
     output_filename : str, optional
         Path to save the reconstructed image, by default "recon.pkl"
+    validation_recon: np.ndarray, optional
+        The validation reconstruction to compare the results with, by default None
+    metrics: dict, optional
+        List of metrics to evaluate the reconstruction, by default None
     """
     recon_adjoint, additional_data = dc_adjoint(
         obs_file,
@@ -193,14 +197,21 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         lipschitz_cst=fourier_op.impl.get_lipschitz_cst(),
     )
     log.info("Starting reconstruction")
-    recon, costs, metrics = reconstructor.reconstruct(
+    recon, costs, metrics_iter = reconstructor.reconstruct(
         kspace_data=kspace_data,
         optimization_alg=algorithm,
         x_init=recon_adjoint, # gain back the first step by initializing with DC Adjoint
         num_iterations=num_iterations,
     )
+    if validation_recon is not None:
+        log.info("getting metrics of the reconstruction")
+        final_metrics = {}
+        for metric, function in metrics.items():
+            final_metrics[metric] = function(recon, validation_recon)
+        log.info(f"Final Metrics: {final_metrics}")
+        data_header['metrics'] = final_metrics
     data_header['costs'] = costs
-    data_header['metrics'] = metrics
+    data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon, data_header)
 
