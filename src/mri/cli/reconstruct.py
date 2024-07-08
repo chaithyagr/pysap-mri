@@ -18,7 +18,7 @@ save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args
 
 
 def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int, debug: int,
-               obs_reader, traj_reader, fourier, output_filename: str = "dc_adjoint.pkl"):
+               obs_reader, traj_reader, fourier, output_filename: str = "dc_adjoint.nii"):
     """
     Reconstructs an image using the adjoint operator.
 
@@ -92,7 +92,11 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     )
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
-        kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, np.squeeze(raw_data))
+        if data_header["type"] == "retro_recon":
+            kspace_loc = discard_frequency_outliers(kspace_loc)
+            kspace_data = np.squeeze(raw_data)
+        else:
+            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, np.squeeze(raw_data))
     kspace_data = kspace_data.astype(np.complex64)
     kspace_loc = kspace_loc.astype(np.float32)
     log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
@@ -138,7 +142,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     
 def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, obs_reader, traj_reader, fourier, linear, sparsity,
-          output_filename: str = "recon.pkl", validation_recon: np.ndarray = None, metrics: dict = None):
+          output_filename: str = "recon.nii", validation_recon: np.ndarray = None, metrics: dict = None):
     """Reconstructs an MRI image using the given parameters.
 
     Parameters

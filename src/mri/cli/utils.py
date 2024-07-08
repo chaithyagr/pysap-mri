@@ -38,6 +38,7 @@ smaps_config = builds(
 fourier_op_config = builds(
     NonCartesianFFT,
     populate_full_signature=True,
+    implementation="gpuNUFFT",
     zen_exclude=["n_coils"],
     zen_partial=True,
 )
@@ -65,11 +66,11 @@ cost_config = builds(
 )
 
 fourier_store = store(group="fourier")
-fourier_store(fourier_op_config, name="cpu")
+fourier_store(fourier_op_config, name="gpu")
 fourier_store(
     fourier_op_config,
-    implementation="gpuNUFFT",
-    name="gpu",
+    implementation="finufft",
+    name="cpu",
 )
 fourier_store(
     fourier_op_config,
@@ -89,7 +90,7 @@ linear_store(linear_config, name="gpu")
 sparsity_store = store(group="sparsity")
 sparsity_store(sparsity_config, name="weighted_sparse")
 
-def setup_hydra_config():
+def setup_hydra_config(verbose=False):
     """
     Set up the configuration for Hydra.
 
@@ -117,7 +118,7 @@ def setup_hydra_config():
                     '_target_': "hydra_callbacks.RuntimePerformance"
                 },
             },
-            verbose=True,
+            verbose=verbose,
         )
     )
 

@@ -1,20 +1,19 @@
 from hydra_zen import store, zen
 import numpy as np
 
-from mri.cli.utils import traj_config
+from mri.cli.utils import traj_config, fourier_op_config
 from mri.operators.fourier.utils import discard_frequency_outliers
 import nibabel as nib
-import logging
+import logging, os
 from mri.cli.reconstruct import recon
 from mri.optimizers.utils.metrics import box_psnr, box_ssim
-
 
 log = logging.getLogger(__name__)
 
 
 def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, traj_reader, fourier, forward, linear, sparsity,
-          output_filename: str = "recon.pkl"):
+          output_filename: str = "recon.nii"):
     """Perform retrospective reconstruction on MRI data.
     This function takes MRI data and performs retrospective reconstruction using the specified parameters.
 
@@ -62,6 +61,8 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         "n_adc_samples": shots.shape[1]*traj_params['min_osf'],
         "n_slices": 1,
         "n_contrasts": 1,
+        "oversampling_factor": traj_params['min_osf'],
+        "trajectory_name": os.path.basename(traj_file),
     }
     recon(
         obs_file="",
@@ -89,15 +90,16 @@ store(
     traj_reader=traj_config,
     algorithm="pogm",
     num_iterations=30,
+    forward=fourier_op_config,
     coil_compress=5,
     debug=1,
     hydra_defaults=[
         "_self_",
-        {"forward": "gpu"},
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe_lowmem"},
         {"fourier/smaps": "low_frequency"},
-        
+        {"linear": "gpu"},
+        {"sparsity": "weighted_sparse"},
     ],
     name="retro_recon",
 )
