@@ -7,6 +7,7 @@ from mrinufft.io.utils import add_phase_to_kspace_with_shifts
 from pymrt.recipes.coils import compress_svd
 from mri.reconstructors import SelfCalibrationReconstructor
 
+import json
 import numpy as np
 import pickle as pkl
 import logging, os, glob
@@ -213,6 +214,8 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         for metric, function in metrics.items():
             final_metrics[metric] = function(recon, validation_recon)
         log.info(f"Final Metrics: {final_metrics}")
+        with open(get_outdir_path('metrics.json'), 'w') as f:
+            f.write(json.dumps(final_metrics, indent=4))
         data_header['metrics'] = final_metrics
     data_header['costs'] = costs
     data_header['metrics_iter'] = metrics_iter
