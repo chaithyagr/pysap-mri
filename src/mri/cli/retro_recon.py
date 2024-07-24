@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 
 def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, traj_reader, fourier, forward, linear, sparsity,
-          output_filename: str = "recon.nii"):
+          noise_cov: str = None, output_filename: str = "recon.nii"):
     """Perform retrospective reconstruction on MRI data.
     This function takes MRI data and performs retrospective reconstruction using the specified parameters.
 
@@ -54,6 +54,22 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     kspace_loc = discard_frequency_outliers(shots.reshape(-1, traj_params["dimension"]))
     forward_op = forward(kspace_loc, traj_params["img_size"], n_coils=image.shape[0])
     kspace_data = forward_op.op(image)
+    
+    # Add noise
+    if noise_cov is not None:
+        log.info("Adding noise to the k-space data")
+        noise_cov_matrix = np.load(noise_cov)
+        # FIXME: Remove this, this is temporary
+        noise_cov_matrix = noise_cov_matrix[:kspace_data.shape[0], :kspace_data.shape[0]]
+        noise_args = {
+            "mean": np.zeros(image.shape[0]),
+            "cov": noise_cov_matrix*traj_params['min_osf'],
+            "size": kspace_data.shape[1:],
+            "check_valid": "warn",
+        }
+        noise = np.random.multivariate_normal(**noise_args) + 1j*np.random.multivariate_normal(**noise_args)
+        kspace_data += np.moveaxis(noise.astype(np.complex64), -1, 0)
+    
     data_header = {
         "n_coils": image.shape[0],
         "shifts": [0, 0, 0],

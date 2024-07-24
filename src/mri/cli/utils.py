@@ -90,9 +90,17 @@ linear_store(linear_config, name="gpu")
 sparsity_store = store(group="sparsity")
 sparsity_store(sparsity_config, name="weighted_sparse")
 
-def setup_hydra_config(verbose=False):
+
+def setup_hydra_config(verbose=False, multirun_gather=False):
     """
     Set up the configuration for Hydra.
+
+    Parameters
+    ----------
+    verbose : bool, optional
+        If True, the verbose mode is enabled, by default False
+    multirun_gather : bool, optional
+        If True, the multirun gather is enabled, by default False
 
     Returns
     -------
@@ -100,24 +108,30 @@ def setup_hydra_config(verbose=False):
         This function does not return anything.
     """
     outdir = os.environ.get('RECON_OUTDIR', 'recon')
+    callbacks = {
+        'git_infos': {
+            '_target_': "hydra_callbacks.GitInfo",
+            'clean': True
+        },
+        'resource_monitor': {
+            '_target_': "hydra_callbacks.ResourceMonitor",
+            'sample_interval': 1,
+            'gpu_monit': True,
+        },
+        'runtime_perf': {
+            '_target_': "hydra_callbacks.RuntimePerformance"
+        },
+    }
+    if multirun_gather:
+        callbacks['multirun_gather'] = {
+            '_target_': "hydra_callbacks.MultiRunGatherer",
+            'result_file': "metrics.json",
+        }
     store(
         HydraConf(
             job=JobConf(name="recon"),
             sweep=SweepDir(dir=os.path.join(outdir, "${hydra.job.name}") + "/${now:%Y-%m-%d-%H-%M-%S}"),
-            callbacks={
-                'git_infos': {
-                    '_target_': "hydra_callbacks.GitInfo",
-                    'clean': True
-                },
-                'resource_monitor': {
-                    '_target_': "hydra_callbacks.ResourceMonitor",
-                    'sample_interval': 1,
-                    'gpu_monit': True,
-                },
-                'runtime_perf': {
-                    '_target_': "hydra_callbacks.RuntimePerformance"
-                },
-            },
+            callbacks=callbacks,
             verbose=verbose,
         )
     )
