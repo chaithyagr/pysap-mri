@@ -213,6 +213,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         final_metrics = {}
         for metric, function in metrics.items():
             final_metrics[metric] = function(recon, validation_recon)
+            final_metrics[f"dc_{metric}"] = function(recon_adjoint, validation_recon)
         log.info(f"Final Metrics: {final_metrics}")
         with open(get_outdir_path('metrics.json'), 'w') as f:
             final_metrics["traj"] = data_header["trajectory_name"]
