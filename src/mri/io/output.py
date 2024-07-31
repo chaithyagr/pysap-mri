@@ -25,7 +25,7 @@ def save_data(filename, recon, header=None):
     elif extension == 'mat':
         savemat(filename, save_dict)
     elif extension == 'nii':
-        orient = np.ones((4, 4))
+        orient = np.eye(4)
         if 'orientation' in header:
             orient = header['orientation']
         recon = np.abs(recon)
