@@ -123,10 +123,10 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     if debug > 0:
         intermediate = {
             'density_comp': fourier_op.impl.density,
-            'smaps': fourier_op.impl.smaps,
             'traj_params': traj_params,
             'data_header': data_header,
         }
+        save_data_hydra('smaps.nii', fourier_op.impl.smaps)
         if coil_compress != -1:
             intermediate['kspace_data'] = kspace_data
         log.info("Saving Smaps and denisty_comp as intermediates")
@@ -144,7 +144,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     
 def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, obs_reader, traj_reader, fourier, linear, sparsity,
-          output_filename: str = "recon.nii", validation_recon: np.ndarray = None, metrics: dict = None):
+          output_filename: str = "recon.nii", remove_dc_for_recon: bool = True, validation_recon: np.ndarray = None, metrics: dict = None):
     """Reconstructs an MRI image using the given parameters.
 
     Parameters
@@ -175,6 +175,9 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         Object representing the sparsity operator.
     output_filename : str, optional
         Path to save the reconstructed image, by default "recon.pkl"
+    remove_dc_for_recon: bool, optional
+        Whether to remove the density compensation for reconstruction, by default True
+        Note that it will still be used to estimate x_init
     validation_recon: np.ndarray, optional
         The validation reconstruction to compare the results with, by default None
     metrics: dict, optional
@@ -191,6 +194,11 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         output_filename='dc_adjoint' + output_filename[-4:],
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
+    if remove_dc_for_recon:
+        fourier_op.impl.density = None
+    K = fourier_op.op(recon_adjoint)
+    alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
+    recon_adjoint *= alpha
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(recon_adjoint)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)

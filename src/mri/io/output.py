@@ -26,7 +26,7 @@ def save_data(filename, recon, header=None):
         savemat(filename, save_dict)
     elif extension == 'nii':
         orient = np.eye(4)
-        if 'orientation' in header:
+        if header is not None and 'orientation' in header:
             orient = header['orientation']
         recon = np.abs(recon)
         recon /= np.max(recon)
