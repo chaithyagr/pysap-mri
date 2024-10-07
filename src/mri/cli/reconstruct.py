@@ -55,6 +55,8 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
     raw_data, data_header = obs_reader(obs_file)
+    if obs_reader.keywords['slice_num'] is not None:
+        data_header['slice_num'] = obs_reader.keywords['slice_num']
     log.info(f"Data Header: {data_header}")
     try:
         if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
@@ -191,7 +193,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         obs_reader,
         traj_reader,
         fourier,
-        output_filename='dc_adjoint' + output_filename[-4:],
+        output_filename='dc_adj_' + output_filename,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
     if remove_dc_for_recon:
