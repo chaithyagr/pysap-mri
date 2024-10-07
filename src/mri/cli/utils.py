@@ -12,6 +12,19 @@ from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
 import os
 
+try:
+    from ggrappa.grappaND import GRAPPA_Recon
+    grappa_config = builds(
+        GRAPPA_Recon,
+        af=1,
+        zen_exclude=["sig", "acs", "isGolfSparks", "quiet"],
+        zen_partial=True,        
+        populate_full_signature=True,
+    )
+    grappa_store = store(group="grappa_recon")
+    grappa_store(grappa_config, name="disable")
+except:
+    pass
 
 raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)
 
