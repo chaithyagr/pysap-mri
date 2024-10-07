@@ -7,24 +7,26 @@ from mrinufft.io.utils import add_phase_to_kspace_with_shifts
 from pymrt.recipes.coils import compress_svd
 from mri.reconstructors import SelfCalibrationReconstructor
 
+import json
 import numpy as np
 import pickle as pkl
 import logging, os, glob
 from functools import partial
+
 
 log = logging.getLogger(__name__)
 
 save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args, **kwargs)
 
 
-def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int,
-               obs_reader, traj_reader, fourier, output_filename: str = "dc_adjoint.pkl"):
+def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int, debug: int,
+               obs_reader, traj_reader, fourier, output_filename: str = "dc_adjoint.nii"):
     """
     Reconstructs an image using the adjoint operator.
 
     Parameters
     ----------
-    obs_file : str
+    obs_file : str or np.ndarray
         Path to the observed kspace data file.
     traj_file : str
         Path to the trajectory file or the folder holding trajectory file.
@@ -53,6 +55,8 @@ def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
     raw_data, data_header = obs_reader(obs_file)
+    if obs_reader.keywords['slice_num'] is not None:
+        data_header['slice_num'] = obs_reader.keywords['slice_num']
     log.info(f"Data Header: {data_header}")
     try:
         if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
@@ -92,7 +96,11 @@ def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int
     )
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
-        kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, np.squeeze(raw_data))
+        if data_header["type"] == "retro_recon":
+            kspace_loc = discard_frequency_outliers(kspace_loc)
+            kspace_data = np.squeeze(raw_data)
+        else:
+            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, np.squeeze(raw_data))
     kspace_data = kspace_data.astype(np.complex64)
     kspace_loc = kspace_loc.astype(np.float32)
     log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
@@ -117,10 +125,10 @@ def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int
     if debug > 0:
         intermediate = {
             'density_comp': fourier_op.impl.density,
-            'smaps': fourier_op.impl.smaps,
             'traj_params': traj_params,
             'data_header': data_header,
         }
+        save_data_hydra('smaps.nii', fourier_op.impl.smaps)
         if coil_compress != -1:
             intermediate['kspace_data'] = kspace_data
         log.info("Saving Smaps and denisty_comp as intermediates")
@@ -138,7 +146,7 @@ def dc_adjoint(obs_file: str, traj_file: str, coil_compress: str|int, debug: int
     
 def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, obs_reader, traj_reader, fourier, linear, sparsity,
-          output_filename: str = "recon.pkl"):
+          output_filename: str = "recon.nii", remove_dc_for_recon: bool = True, validation_recon: np.ndarray = None, metrics: dict = None):
     """Reconstructs an MRI image using the given parameters.
 
     Parameters
@@ -169,6 +177,13 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         Object representing the sparsity operator.
     output_filename : str, optional
         Path to save the reconstructed image, by default "recon.pkl"
+    remove_dc_for_recon: bool, optional
+        Whether to remove the density compensation for reconstruction, by default True
+        Note that it will still be used to estimate x_init
+    validation_recon: np.ndarray, optional
+        The validation reconstruction to compare the results with, by default None
+    metrics: dict, optional
+        List of metrics to evaluate the reconstruction, by default None
     """
     recon_adjoint, additional_data = dc_adjoint(
         obs_file,
@@ -178,9 +193,14 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         obs_reader,
         traj_reader,
         fourier,
-        output_filename='dc_adjoint' + output_filename[-4:],
+        output_filename='dc_adj_' + output_filename,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
+    if remove_dc_for_recon:
+        fourier_op.impl.density = None
+    K = fourier_op.op(recon_adjoint)
+    alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
+    recon_adjoint *= alpha
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(recon_adjoint)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
@@ -193,14 +213,25 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         lipschitz_cst=fourier_op.impl.get_lipschitz_cst(),
     )
     log.info("Starting reconstruction")
-    recon, costs, metrics = reconstructor.reconstruct(
+    recon, costs, metrics_iter = reconstructor.reconstruct(
         kspace_data=kspace_data,
         optimization_alg=algorithm,
         x_init=recon_adjoint, # gain back the first step by initializing with DC Adjoint
         num_iterations=num_iterations,
     )
+    if validation_recon is not None:
+        log.info("getting metrics of the reconstruction")
+        final_metrics = {}
+        for metric, function in metrics.items():
+            final_metrics[metric] = function(recon, validation_recon)
+            final_metrics[f"dc_{metric}"] = function(recon_adjoint, validation_recon)
+        log.info(f"Final Metrics: {final_metrics}")
+        with open(get_outdir_path('metrics.json'), 'w') as f:
+            final_metrics["traj"] = data_header["trajectory_name"]
+            f.write(json.dumps(final_metrics, indent=4))
+        data_header['metrics'] = final_metrics
     data_header['costs'] = costs
-    data_header['metrics'] = metrics
+    data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon, data_header)
 

@@ -38,6 +38,7 @@ smaps_config = builds(
 fourier_op_config = builds(
     NonCartesianFFT,
     populate_full_signature=True,
+    implementation="gpuNUFFT",
     zen_exclude=["n_coils"],
     zen_partial=True,
 )
@@ -46,7 +47,7 @@ linear_config = builds(
     populate_full_signature=True,
     zen_partial=True,
     wavelet_name="sym8",
-    nb_scale=4,
+    nb_scale=3,
     zen_exclude=["shape"]
 )
 sparsity_config = builds(
@@ -65,11 +66,11 @@ cost_config = builds(
 )
 
 fourier_store = store(group="fourier")
-fourier_store(fourier_op_config, name="cpu")
+fourier_store(fourier_op_config, name="gpu")
 fourier_store(
     fourier_op_config,
-    implementation="gpuNUFFT",
-    name="gpu",
+    implementation="finufft",
+    name="cpu",
 )
 fourier_store(
     fourier_op_config,
@@ -89,9 +90,17 @@ linear_store(linear_config, name="gpu")
 sparsity_store = store(group="sparsity")
 sparsity_store(sparsity_config, name="weighted_sparse")
 
-def setup_hydra_config():
+
+def setup_hydra_config(verbose=False, multirun_gather=False):
     """
     Set up the configuration for Hydra.
+
+    Parameters
+    ----------
+    verbose : bool, optional
+        If True, the verbose mode is enabled, by default False
+    multirun_gather : bool, optional
+        If True, the multirun gather is enabled, by default False
 
     Returns
     -------
@@ -99,25 +108,31 @@ def setup_hydra_config():
         This function does not return anything.
     """
     outdir = os.environ.get('RECON_OUTDIR', 'recon')
+    callbacks = {
+        'git_infos': {
+            '_target_': "hydra_callbacks.GitInfo",
+            'clean': True
+        },
+        'resource_monitor': {
+            '_target_': "hydra_callbacks.ResourceMonitor",
+            'sample_interval': 1,
+            'gpu_monit': True,
+        },
+        'runtime_perf': {
+            '_target_': "hydra_callbacks.RuntimePerformance"
+        },
+    }
+    if multirun_gather:
+        callbacks['multirun_gather'] = {
+            '_target_': "hydra_callbacks.MultiRunGatherer",
+            'result_file': "metrics.json",
+        }
     store(
         HydraConf(
             job=JobConf(name="recon"),
             sweep=SweepDir(dir=os.path.join(outdir, "${hydra.job.name}") + "/${now:%Y-%m-%d-%H-%M-%S}"),
-            callbacks={
-                'git_infos': {
-                    '_target_': "hydra_callbacks.GitInfo",
-                    'clean': True
-                },
-                'resource_monitor': {
-                    '_target_': "hydra_callbacks.ResourceMonitor",
-                    'sample_interval': 1,
-                    'gpu_monit': True,
-                },
-                'runtime_perf': {
-                    '_target_': "hydra_callbacks.RuntimePerformance"
-                },
-            },
-            verbose=True,
+            callbacks=callbacks,
+            verbose=verbose,
         )
     )
 

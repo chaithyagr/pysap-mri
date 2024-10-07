@@ -32,6 +32,7 @@ scripts=["hydra-zen", "pymrt", "nibabel", "hydra-callbacks"]
 [project.scripts]
 recon = "mri.cli.reconstruct:run_recon"
 dc_adjoint = "mri.cli.reconstruct:run_adjoint"
+retro_recon = "mri.cli.retro_recon:run_retro_recon"
 
 [project.urls]
 Homepage = "https://github.com/CEA-COSMIC/pysap-mri"
