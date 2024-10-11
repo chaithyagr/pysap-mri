@@ -143,6 +143,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             'density_comp': fourier_op.impl.density,
             'traj_params': traj_params,
             'data_header': data_header,
+            'kspace_loc': kspace_loc,
         }
         save_data_hydra('smaps.nii', fourier_op.impl.smaps)
         if coil_compress != -1:
