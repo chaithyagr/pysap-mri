@@ -91,21 +91,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         for size in traj_params['img_size']
     ])
     log.info(f"Trajectory Parameters: {traj_params}")
-    kspace_data = kspace_data.astype(np.complex64)
-    kspace_loc = kspace_loc.astype(np.float32)
-    log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
-    kspace_data = add_phase_to_kspace_with_shifts(
-        kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
-    )
-    if grappa_recon is not None:
-        log.info("Performing GRAPPA Reconstruction")
-        kspace_loc, kspace_data = do_grappa_and_append_data(
-            kspace_loc,
-            kspace_data,
-            traj_params,
-            grappa_recon,
-        )
-    kspace_loc = shots.reshape(-1, traj_params["dimension"])
     data_header["shifts"] = data_header['shifts'][:traj_params["dimension"]]
     normalized_shifts = (
         np.array(data_header["shifts"])
@@ -113,19 +98,37 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         * np.array(traj_params["img_size"])
         / 1000
     )
+    kspace_data = np.squeeze(raw_data).astype(np.complex64)
+    kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
+    log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
+    kspace_data = add_phase_to_kspace_with_shifts(
+        kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
+    )
+    if coil_compress != -1:
+        log.info("Compressing coils")
+        kspace_data = np.ascontiguousarray(compress_svd(
+            kspace_data,
+            k_svd=coil_compress,
+            coil_axis=0
+        )).astype(np.complex64)
+    if grappa_recon is not None:
+        af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
+        log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
+        grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+        log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
+        kspace_loc, kspace_data = do_grappa_and_append_data(
+            kspace_loc,
+            kspace_data,
+            traj_params,
+            grappa_recon,
+        )
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
         if data_header["type"] == "retro_recon":
             kspace_loc = discard_frequency_outliers(kspace_loc)
             kspace_data = np.squeeze(raw_data)
         else:
-            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, np.squeeze(raw_data))
-    if coil_compress != -1:
-        kspace_data = np.ascontiguousarray(compress_svd(
-            kspace_data,
-            k_svd=coil_compress,
-            coil_axis=0
-        ))
+            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
     fourier.keywords['smaps'] = partial(
         fourier.keywords['smaps'],
         kspace_data=kspace_data,
@@ -207,6 +210,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         obs_reader,
         traj_reader,
         fourier,
+        grappa_recon=grappa_recon,
         output_filename='dc_adj_' + output_filename,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
@@ -261,7 +265,6 @@ store(
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
-        {},
         {"fourier/smaps": "low_frequency"},
     ],
     name="dc_adjoint",

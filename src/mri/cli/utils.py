@@ -16,8 +16,7 @@ try:
     from ggrappa.grappaND import GRAPPA_Recon
     grappa_config = builds(
         GRAPPA_Recon,
-        af=1,
-        zen_exclude=["sig", "acs", "isGolfSparks", "quiet"],
+        zen_exclude=["sig", "acs", "isGolfSparks", "quiet", "af"],
         zen_partial=True,        
         populate_full_signature=True,
     )
