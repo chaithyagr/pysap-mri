@@ -111,10 +111,13 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             k_svd=coil_compress,
             coil_axis=0
         )).astype(np.complex64)
-    if grappa_recon is not None:
+    try:
         af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
-        log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
         grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+    except:
+        grappa_recon.keywords['af'] = (1, )
+    if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
+        log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
         log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
         kspace_loc, kspace_data = do_grappa_and_append_data(
             kspace_loc,
