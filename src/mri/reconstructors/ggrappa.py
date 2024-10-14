@@ -12,10 +12,9 @@ except:
     
 def do_grappa_and_append_data(kspace_loc, kspace_data, traj_params, grappa_maker):
     kspace_shots = kspace_loc.reshape(traj_params['num_shots'], -1, traj_params['dimension'])
-    osf = kspace_shots.shape[1] / traj_params['num_samples_per_shot']
     if not GRAPPA_RECON_AVAILABLE:
         raise ValueError("GRAPPA is not available")
-    gridded_center = get_cart_portion_sparkling(kspace_shots, traj_params, kspace_data, osf=int(osf))
+    gridded_center = get_cart_portion_sparkling(kspace_shots, traj_params, kspace_data)
     grappa_recon, grappa_kernel = grappa_maker(
         sig=torch.tensor(gridded_center).permute(0, 2, 3, 1),
         acs=None,
