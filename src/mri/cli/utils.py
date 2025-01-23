@@ -43,6 +43,7 @@ density_est_config = builds(
 smaps_config = builds(
     get_smaps("low_frequency"),
     populate_full_signature=True,
+    blurr_factor=30.0,
     # We estimate density, with separate args. It is passed by compute_smaps in mri-nufft
     zen_exclude=["density"],
     zen_partial=True,

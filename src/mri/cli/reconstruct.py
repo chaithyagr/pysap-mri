@@ -13,8 +13,6 @@ import numpy as np
 import pickle as pkl
 import logging, os, glob
 from functools import partial
-from typing import Union
-
 
 log = logging.getLogger(__name__)
 
@@ -280,6 +278,7 @@ store(
     algorithm="pogm",
     num_iterations=30,
     coil_compress=10,
+    mu=1e-7,
     debug=1,
     hydra_defaults=[
         "_self_",
@@ -300,6 +299,7 @@ store(
     algorithm="pogm",
     num_iterations=30,
     coil_compress=5,
+    mu=1e-7,
     debug=1,
     hydra_defaults=[
         "_self_",
