@@ -1,9 +1,9 @@
 from hydra_zen import store, zen
 
 from mri.io.output import save_data
-from mri.cli.utils import raw_config, traj_config, grappa_config, setup_hydra_config, get_outdir_path
+from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path
 from mri.operators.fourier.utils import discard_frequency_outliers
-from mrinufft.io.utils import add_phase_to_kspace_with_shifts
+from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
 from pymrt.recipes.coils import compress_svd
 from mri.reconstructors import SelfCalibrationReconstructor
 from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_AVAILABLE
@@ -98,6 +98,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     )
     kspace_data = np.squeeze(raw_data).astype(np.complex64)
     kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
+    kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
     log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
@@ -114,6 +115,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
     except:
         grappa_recon.keywords['af'] = (1, )
+        grappa_recon.keywords['delta'] = 0
     if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
         log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
         log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
@@ -122,6 +124,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             kspace_data,
             traj_params,
             grappa_recon,
+            acs=data_header["acs"], # Pass ACS if read in data (external)
         )
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
