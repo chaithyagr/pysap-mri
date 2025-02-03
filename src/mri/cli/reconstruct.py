@@ -21,7 +21,7 @@ save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args
 
 def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int, debug: int,
                obs_reader, traj_reader, fourier, grappa_recon=None, output_filename: str = "dc_adjoint.nii",
-               ):
+               return_data=False):
     """
     Reconstructs an image using the adjoint operator.
 
@@ -161,7 +161,8 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     log.info("Saving DC Adjoint")
     data_header['traj_params'] = traj_params
     save_data_hydra(output_filename, dc_adjoint, data_header)
-    return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
+    if return_data:
+        return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
     
     
     
@@ -217,6 +218,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         fourier,
         grappa_recon=grappa_recon,
         output_filename='dc_adj_' + output_filename,
+        return_data=True,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
     if remove_dc_for_recon:
