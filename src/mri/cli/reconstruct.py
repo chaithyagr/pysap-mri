@@ -99,6 +99,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     kspace_data = np.squeeze(raw_data).astype(np.complex64)
     kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
     kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
+    kspace_data = kspace_data.reshape(kspace_data.shape[0], -1)
     log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
@@ -112,6 +113,10 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         )).astype(np.complex64)
     try:
         af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
+        if len(af_string) > 1 and 'd' in af_string[1]:
+            af_caipi = af_string[1].split('d')
+            af_string[1] = af_caipi[0]
+            grappa_recon.keywords['delta'] = int(af_caipi[1])
         grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
     except:
         grappa_recon.keywords['af'] = (1, )
