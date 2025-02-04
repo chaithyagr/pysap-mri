@@ -104,13 +104,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
     )
-    if coil_compress != -1:
-        log.info("Compressing coils")
-        kspace_data = np.ascontiguousarray(compress_svd(
-            kspace_data,
-            k_svd=coil_compress,
-            coil_axis=0
-        )).astype(np.complex64)
     try:
         af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
         if len(af_string) > 1 and 'd' in af_string[1]:
@@ -131,6 +124,13 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             grappa_recon,
             acs=data_header["acs"], # Pass ACS if read in data (external)
         )
+    if coil_compress != -1:
+        log.info("Compressing coils")
+        kspace_data = np.ascontiguousarray(compress_svd(
+            kspace_data,
+            k_svd=coil_compress,
+            coil_axis=0
+        )).astype(np.complex64)
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
         if data_header["type"] == "retro_recon":
