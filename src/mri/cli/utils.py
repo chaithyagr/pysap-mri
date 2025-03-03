@@ -12,6 +12,18 @@ from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
 import os
 
+try:
+    from ggrappa.grappaND import GRAPPA_Recon
+    grappa_config = builds(
+        GRAPPA_Recon,
+        zen_exclude=["sig", "acs", "isGolfSparks", "quiet", "af"],
+        zen_partial=True,        
+        populate_full_signature=True,
+    )
+    grappa_store = store(group="grappa_recon")
+    grappa_store(grappa_config, name="disable")
+except:
+    pass
 
 raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)
 
@@ -31,6 +43,7 @@ density_est_config = builds(
 smaps_config = builds(
     get_smaps("low_frequency"),
     populate_full_signature=True,
+    blurr_factor=30.0,
     # We estimate density, with separate args. It is passed by compute_smaps in mri-nufft
     zen_exclude=["density"],
     zen_partial=True,
