@@ -272,7 +272,7 @@ store(
     obs_reader=raw_config,
     traj_reader=traj_config,
     coil_compress=10,
-    debug=1,
+    debug=0,
     hydra_defaults=[
         "_self_",
         {"fourier": "gpu"},
@@ -290,7 +290,7 @@ store(
     num_iterations=30,
     coil_compress=10,
     mu=1e-7,
-    debug=1,
+    debug=0,
     hydra_defaults=[
         "_self_",
         {"fourier": "gpu"},
@@ -311,7 +311,7 @@ store(
     num_iterations=30,
     coil_compress=5,
     mu=1e-7,
-    debug=1,
+    debug=0,
     hydra_defaults=[
         "_self_",
         {"fourier": "gpu_lowmem"},
