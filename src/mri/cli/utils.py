@@ -17,7 +17,8 @@ try:
     grappa_config = builds(
         GRAPPA_Recon,
         zen_exclude=["sig", "acs", "isGolfSparks", "quiet", "af"],
-        zen_partial=True,        
+        zen_partial=True,
+         
         populate_full_signature=True,
     )
     grappa_store = store(group="grappa_recon")
@@ -41,7 +42,7 @@ density_est_config = builds(
     zen_partial=True,
 )
 smaps_config = builds(
-    get_smaps("low_frequency"),
+    get_smaps("inati_iter"),
     populate_full_signature=True,
     blurr_factor=30.0,
     # We estimate density, with separate args. It is passed by compute_smaps in mri-nufft
