@@ -309,7 +309,7 @@ store(
     traj_reader=traj_config,
     algorithm="pogm",
     num_iterations=10,
-    coil_compress=5,
+    coil_compress=10,
     mu=1e-7,
     debug=0,
     hydra_defaults=[
