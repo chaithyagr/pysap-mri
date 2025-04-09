@@ -287,7 +287,7 @@ store(
     obs_reader=raw_config,
     traj_reader=traj_config,
     algorithm="pogm",
-    num_iterations=30,
+    num_iterations=10,
     coil_compress=10,
     mu=1e-7,
     debug=0,
