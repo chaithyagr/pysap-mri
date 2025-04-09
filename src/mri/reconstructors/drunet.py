@@ -775,7 +775,7 @@ class ComplexDenoiser(torch.nn.Module):
         self.norm_factor = norm_factor
 
     def forward(self, x, sigma, norm=True):
-        x = torch.permute(torch.view_as_real(x.squeeze(0)), (0, 4, 1, 2, 3)).to(
+        x = torch.permute(torch.view_as_real(x.unsqueeze(0)), (0, 4, 1, 2, 3)).to(
             x.device
         )
         x = x * self.norm_factor
@@ -783,4 +783,4 @@ class ComplexDenoiser(torch.nn.Module):
             test_pad(self.denoiser, L=x, sigma=sigma).to(x.device), (0, 2, 3, 4, 1)
         )
         x_ = x_ / self.norm_factor
-        return torch.view_as_complex(x_.contiguous()).unsqueeze(0)
+        return torch.view_as_complex(x_.contiguous()).squeeze(0)

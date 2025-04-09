@@ -3,7 +3,8 @@ from deepinv.physics import LinearPhysics
 import numpy as np
 from deepinv.optim.data_fidelity import L2
 from deepinv.optim import optim_builder, PnP
-
+import torch
+from tqdm import tqdm
 
 class Nufft(LinearPhysics):
     """
@@ -28,38 +29,33 @@ class Nufft(LinearPhysics):
     
 
 
-def pnp_reconstruct(fourier_op, kspace_data, traj_params, data_header):
+def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, start_sigma: float = 0.5,
+                    end_sigma: float = 0.01, lamda: float = 2, max_iter: int = 10):
     physics  = Nufft(fourier_op)
-    denoiser = load_drunet_mri("/volatile/")
+    denoiser = load_drunet_mri(weights_file, norm_factor=np.abs(dc_adjoint).max())
     prior = PnP(denoiser)
-    max_iter = 50
     kwargs_optim = dict()
     kwargs_optim["params_algo"] = get_DPIR_params(
-            s1=0.1,
-            s2=0.05,
-            lamb=2,
-            n_iter=max_iter,
-        )
+        s1=start_sigma,
+        s2=end_sigma,
+        lamb=lamda,
+        n_iter=max_iter,
+    )
+    dc_adjoint = torch.from_numpy(dc_adjoint)
     algo = optim_builder(
-            iteration="HQS",
-            prior=prior,
-            data_fidelity=L2(),
-            early_stop=False,
-            custom_init=get_custom_init,
-            max_iter=max_iter,
-            verbose=False,
-            **kwargs_optim,
-        )
-    for itr in range(max_iter):
-        x_cur = algo.fixed_point.single_iteration(
-                x_cur,
-                itr,
-                kspace_data,
-                physics,
-                compute_metrics=False,
-                x_gt=None,
-            )
-    return x_cur
+        iteration="HQS",
+        prior=prior,
+        data_fidelity=L2(),
+        early_stop=False,
+        custom_init=lambda y, phy: {"est": (dc_adjoint, dc_adjoint.detach().clone())},
+        max_iter=max_iter,
+        verbose=False,
+        **kwargs_optim,
+    )
+    algo.fixed_point.show_progress_bar = True
+    kspace_data = torch.from_numpy(kspace_data)
+    x_est = algo(kspace_data, physics=physics)
+    return x_est
         
 
     

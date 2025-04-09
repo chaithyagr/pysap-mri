@@ -25,6 +25,21 @@ try:
 except:
     pass
 
+
+try:
+    from mri.reconstructors.pnp import pnp_reconstruct
+    pnp_config = builds(
+        pnp_reconstruct,
+        zen_exclude=["fourier_op", "kspace_data", "dc_adjoint"],
+        zen_partial=True,
+        populate_full_signature=True,
+    )
+    pnp_store = store(group="pnp_recon")
+    pnp_store(pnp_config)
+except:
+    pass
+        
+    
 raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)
 cart_config = builds(read_siemens_rawdat, populate_full_signature=True, zen_partial=True)
 
