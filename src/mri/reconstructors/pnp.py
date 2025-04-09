@@ -41,7 +41,7 @@ def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, star
         lamb=lamda,
         n_iter=max_iter,
     )
-    dc_adjoint = torch.from_numpy(dc_adjoint)
+    dc_adjoint = torch.from_numpy(dc_adjoint).to(device)
     algo = optim_builder(
         iteration="HQS",
         prior=prior,
@@ -53,7 +53,7 @@ def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, star
         **kwargs_optim,
     )
     algo.fixed_point.show_progress_bar = True
-    kspace_data = torch.from_numpy(kspace_data)
+    kspace_data = torch.from_numpy(kspace_data).to(device)
     x_est = algo(kspace_data, physics=physics)
     return x_est
         
