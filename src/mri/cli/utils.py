@@ -29,7 +29,7 @@ except:
 from mri.reconstructors.pnp import pnp_reconstruct
 pnp_config = builds(
     pnp_reconstruct,
-    zen_exclude=["fourier_op", "kspace_data", "dc_adjoint"],
+    zen_exclude=["fourier_op", "kspace_data", "dc_adjoint", "weights_file"],
     zen_partial=True,
     populate_full_signature=True,
 )

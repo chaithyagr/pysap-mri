@@ -171,7 +171,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     
     
     
-def pnp_recon(obs_file: str, traj_file: str, coil_compress: str|int, 
+def pnp_recon(obs_file: str, traj_file: str, weights_file: str, coil_compress: str|int, 
           debug: int, obs_reader, traj_reader, fourier, 
           output_filename: str = "recon.nii", grappa_recon=None, pnp=None):
     """Reconstructs an MRI image using the given parameters.
@@ -182,8 +182,6 @@ def pnp_recon(obs_file: str, traj_file: str, coil_compress: str|int,
         Path to the file containing the observed k-space data.
     traj_file : str
         Path to the file containing the trajectory data.
-    mu : float
-        Regularization parameter for the sparsity constraint.
     num_iterations : int
         Number of iterations for the reconstruction algorithm.
     coil_compress : str | int
@@ -224,10 +222,11 @@ def pnp_recon(obs_file: str, traj_file: str, coil_compress: str|int,
         output_filename='dc_adj_' + output_filename,
         return_data=True,
     )
-    fourier_op, kspace_data, traj_params, data_header = additional_data
+    fourier_op, kspace_data, _, data_header = additional_data
     recon = pnp(fourier_op, kspace_data, recon_adjoint)
+    recon_final = recon.cpu().numpy()
     log.info("Saving reconstruction results")
-    save_data_hydra(output_filename, recon, data_header)
+    save_data_hydra(output_filename, recon_final, data_header)
     
     
     
@@ -408,7 +407,7 @@ def run_recon():
     )
     
 def run_pnp_recon():
-    zen(recon).hydra_main(
+    zen(pnp_recon).hydra_main(
         config_name="pnp_recon",
         config_path=None,
         version_base="1.3",
