@@ -225,8 +225,7 @@ def pnp_recon(obs_file: str, traj_file: str, coil_compress: str|int,
         return_data=True,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
-    from mri.reconstructors.pnp import pnp_reconstruct
-    recon = pnp_reconstruct(fourier_op, kspace_data, recon_adjoint, **pnp)
+    recon = pnp(fourier_op, kspace_data, recon_adjoint)
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon, data_header)
     
@@ -287,8 +286,6 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         return_data=True,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
-    from mri.reconstructors.pnp import pnp_reconstruct
-    recon = pnp_reconstruct(fourier_op, kspace_data, traj_params, data_header, recon_adjoint)
     if remove_dc_for_recon:
         fourier_op.impl.density = None
     K = fourier_op.op(recon_adjoint)
@@ -386,8 +383,6 @@ store(
     pnp_recon,
     obs_reader=raw_config,
     traj_reader=traj_config,
-    algorithm="pogm",
-    num_iterations=10,
     coil_compress=10,
     debug=0,
     hydra_defaults=[
@@ -396,6 +391,7 @@ store(
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
+        {"pnp": "default"}
     ],
     name="pnp_recon",
 )
@@ -411,7 +407,7 @@ def run_recon():
         version_base="1.3",
     )
     
-def run_recon():
+def run_pnp_recon():
     zen(recon).hydra_main(
         config_name="pnp_recon",
         config_path=None,

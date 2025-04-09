@@ -20,7 +20,7 @@ dependencies = [
     "scikit-image>=0.17.0",
     "scikit-learn>=0.19.1",
     "scipy>=1.3.0",
-    "pydicom>=3.0.0",
+    "pydicom",
     "python-pysap",
 ]
 license = {text = "CeCILL-B"}
@@ -35,6 +35,7 @@ scripts=["hydra-core==1.4.0.dev1", "hydra-zen", "pymrt", "nibabel", "hydra-callb
 recon = "mri.cli.reconstruct:run_recon"
 dc_adjoint = "mri.cli.reconstruct:run_adjoint"
 retro_recon = "mri.cli.retro_recon:run_retro_recon"
+pnp_recon = "mri.cli.reconstruct:run_pnp_recon"
 
 [project.urls]
 Homepage = "https://github.com/CEA-COSMIC/pysap-mri"
