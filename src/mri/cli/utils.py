@@ -29,12 +29,13 @@ except:
 from mri.reconstructors.pnp import pnp_reconstruct
 pnp_config = builds(
     pnp_reconstruct,
-    zen_exclude=["fourier_op", "kspace_data", "dc_adjoint", "weights_file"],
+    zen_exclude=["fourier_op", "kspace_data", "dc_adjoint", "weights_file", "num_iterations"],
     zen_partial=True,
     populate_full_signature=True,
 )
 pnp_store = store(group="pnp")
-pnp_store(pnp_config, name="default")
+pnp_store(pnp_config, name="cpu")
+pnp_store(pnp_config, name="gpu", device="cuda")
         
     
 raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)

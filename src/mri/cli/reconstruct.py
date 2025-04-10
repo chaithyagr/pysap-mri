@@ -173,9 +173,8 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     
     
     
-def pnp_recon(obs_file: str, traj_file: str, weights_file: str, coil_compress: str|int, 
-          debug: int, obs_reader, traj_reader, fourier, 
-          output_filename: str = "recon.nii", grappa_recon=None, pnp=None):
+def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: int, coil_compress: str|int, 
+          debug: int, obs_reader, traj_reader, fourier, output_filename: str = "recon.nii", grappa_recon=None, pnp=None):
     """Reconstructs an MRI image using the given parameters.
 
     Parameters
@@ -226,7 +225,7 @@ def pnp_recon(obs_file: str, traj_file: str, weights_file: str, coil_compress: s
     )
     fourier_op, kspace_data, _, data_header = additional_data
     log.info("Initializing PnP Reconstructor")
-    recon = pnp(fourier_op, kspace_data, recon_adjoint, weights_file)
+    recon = pnp(fourier_op, kspace_data, recon_adjoint, weights_file=weights_file, num_iterations=num_iterations)
     recon_final = recon.cpu().numpy()
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon_final, data_header)
@@ -393,7 +392,7 @@ store(
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
-        {"pnp": "default"}
+        {"pnp": "gpu"}
     ],
     name="pnp_recon",
 )

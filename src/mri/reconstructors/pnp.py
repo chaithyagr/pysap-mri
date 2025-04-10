@@ -29,8 +29,8 @@ class Nufft(LinearPhysics):
     
 
 
-def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, start_sigma: float = 0.5,
-                    end_sigma: float = 0.01, lamda: float = 2, max_iter: int = 10, device: str = "cpu"):
+def pnp_reconstruct(fourier_op, kspace_data, weights_file: str, initialization: str='dc_adjoint', start_sigma: float = 0.5,
+                    end_sigma: float = 0.01, lamda: float = 2, num_iterations: int = 10, device: str = "cpu", dc_adjoint=None):
     physics  = Nufft(fourier_op)
     dc_adjoint = torch.from_numpy(dc_adjoint).to(device)
     denoiser = load_drunet_mri(weights_file, norm_factor=1/float(dc_adjoint.abs().max().cpu()), device=device)
@@ -40,15 +40,18 @@ def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, star
         s1=start_sigma,
         s2=end_sigma,
         lamb=lamda,
-        n_iter=max_iter,
+        n_iter=num_iterations,
     )
+    custom_init = lambda y, phy: {"est": (dc_adjoint, dc_adjoint.detach().clone())}
+    if initialization != 'dc_adjoint':
+        custom_init = get_custom_init
     algo = optim_builder(
         iteration="HQS",
         prior=prior,
         data_fidelity=L2(),
         early_stop=False,
-        custom_init=lambda y, phy: {"est": (dc_adjoint, dc_adjoint.detach().clone())},
-        max_iter=max_iter,
+        custom_init=custom_init,
+        max_iter=num_iterations,
         verbose=False,
         **kwargs_optim,
     )
