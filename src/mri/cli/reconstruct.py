@@ -225,7 +225,7 @@ def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: 
     )
     fourier_op, kspace_data, _, data_header = additional_data
     log.info("Initializing PnP Reconstructor")
-    recon = pnp(fourier_op, kspace_data, recon_adjoint, weights_file=weights_file, num_iterations=num_iterations)
+    recon = pnp(fourier_op, kspace_data, dc_adjoint=recon_adjoint, weights_file=weights_file, num_iterations=num_iterations)
     recon_final = recon.cpu().numpy()
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon_final, data_header)
