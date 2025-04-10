@@ -58,7 +58,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     None
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
-    # kspace_loc, kspace_data, data_header, traj_params = pkl.load(open("/volatile/temp.pkl", "rb"))
     raw_data, data_header = obs_reader(obs_file)
     if obs_reader.keywords['slice_num'] is not None:
         data_header['slice_num'] = obs_reader.keywords['slice_num']
