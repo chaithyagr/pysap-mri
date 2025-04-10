@@ -32,7 +32,8 @@ class Nufft(LinearPhysics):
 def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, start_sigma: float = 0.5,
                     end_sigma: float = 0.01, lamda: float = 2, max_iter: int = 10, device: str = "cpu"):
     physics  = Nufft(fourier_op)
-    denoiser = load_drunet_mri(weights_file, norm_factor=np.abs(dc_adjoint).max(), device=device)
+    dc_adjoint = torch.from_numpy(dc_adjoint).to(device)
+    denoiser = load_drunet_mri(weights_file, norm_factor=float(dc_adjoint.abs().max().cpu()), device=device)
     prior = PnP(denoiser)
     kwargs_optim = dict()
     kwargs_optim["params_algo"] = get_DPIR_params(
@@ -41,7 +42,6 @@ def pnp_reconstruct(fourier_op, kspace_data, dc_adjoint, weights_file: str, star
         lamb=lamda,
         n_iter=max_iter,
     )
-    dc_adjoint = torch.from_numpy(dc_adjoint).to(device)
     algo = optim_builder(
         iteration="HQS",
         prior=prior,

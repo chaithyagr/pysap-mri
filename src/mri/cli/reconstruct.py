@@ -168,6 +168,9 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     log.info("Saving DC Adjoint")
     data_header['traj_params'] = traj_params
     save_data_hydra(output_filename, dc_adjoint, data_header)
+    if return_data:
+        log.info("Returning data")
+        return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
     
     
     
