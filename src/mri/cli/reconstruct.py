@@ -58,88 +58,88 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     None
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
-    kspace_loc, kspace_data, data_header, traj_params = pkl.load(open("/volatile/temp.pkl", "rb"))
-    # raw_data, data_header = obs_reader(obs_file)
-    # if obs_reader.keywords['slice_num'] is not None:
-    #     data_header['slice_num'] = obs_reader.keywords['slice_num']
-    # log.info(f"Data Header: {data_header}")
-    # try:
-    #     if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
-    #         log.warn("Trajectory file does not match the trajectory in the data file")
-    # except KeyError:
-    #     log.warn("Trajectory name not found in data header, Skipped Validation")
-    # if os.path.isdir(traj_file):
-    #     search_folder = traj_file
-    #     found_trajs = glob.glob(os.path.join(search_folder, "**", data_header['trajectory_name']), recursive=True)
-    #     if len(found_trajs) == 0:
-    #         log.error(f"Trajectory {traj_file} from data_header not found in {search_folder}")
-    #         exit(1)
-    #     if len(found_trajs) > 1:
-    #         log.warn("More than one file found, choosing first one")
-    #     traj_file = found_trajs[0]
-    # elif not os.path.exists(traj_file):
-    #     log.error("Trajectory not found! exiting")
-    #     exit(1)
-    # log.debug(f"Loading trajectory from {traj_file}")
-    # shots, traj_params = traj_reader(
-    #     traj_file,
-    #     dwell_time=traj_reader.keywords['raster_time'] / data_header["oversampling_factor"],
-    # )
-    # # Need to have image sizes as even to ensure no issues
-    # traj_params['img_size'] = np.asarray([
-    #     size + 1 if size % 2 else size 
-    #     for size in traj_params['img_size']
-    # ])
-    # log.info(f"Trajectory Parameters: {traj_params}")
-    # data_header["shifts"] = data_header['shifts'][:traj_params["dimension"]]
-    # normalized_shifts = (
-    #     np.array(data_header["shifts"])
-    #     / np.array(traj_params["FOV"])
-    #     * np.array(traj_params["img_size"])
-    #     / 1000
-    # )
-    # kspace_data = np.squeeze(raw_data).astype(np.complex64)
-    # kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
-    # kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
-    # kspace_data = kspace_data.reshape(kspace_data.shape[0], -1)
-    # log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
-    # kspace_data = add_phase_to_kspace_with_shifts(
-    #     kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
-    # )
-    # try:
-    #     af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
-    #     if len(af_string) > 1 and 'd' in af_string[1]:
-    #         af_caipi = af_string[1].split('d')
-    #         af_string[1] = af_caipi[0]
-    #         grappa_recon.keywords['delta'] = int(af_caipi[1])
-    #     grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
-    # except:
-    #     grappa_recon.keywords['af'] = (1, )
-    #     grappa_recon.keywords['delta'] = 0
-    # if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
-    #     log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
-    #     log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
-    #     kspace_loc, kspace_data = do_grappa_and_append_data(
-    #         kspace_loc,
-    #         kspace_data,
-    #         traj_params,
-    #         grappa_recon,
-    #         acs=data_header["acs"], # Pass ACS if read in data (external)
-    #     )
-    # if coil_compress != -1:
-    #     log.info("Compressing coils")
-    #     kspace_data = np.ascontiguousarray(compress_svd(
-    #         kspace_data,
-    #         k_svd=coil_compress,
-    #         coil_axis=0
-    #     )).astype(np.complex64)
-    # if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
-    #     log.warn(f"K-space locations are above the unity range, discarding the outlier data")
-    #     if data_header["type"] == "retro_recon":
-    #         kspace_loc = discard_frequency_outliers(kspace_loc)
-    #         kspace_data = np.squeeze(raw_data)
-    #     else:
-    #         kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
+    # kspace_loc, kspace_data, data_header, traj_params = pkl.load(open("/volatile/temp.pkl", "rb"))
+    raw_data, data_header = obs_reader(obs_file)
+    if obs_reader.keywords['slice_num'] is not None:
+        data_header['slice_num'] = obs_reader.keywords['slice_num']
+    log.info(f"Data Header: {data_header}")
+    try:
+        if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
+            log.warn("Trajectory file does not match the trajectory in the data file")
+    except KeyError:
+        log.warn("Trajectory name not found in data header, Skipped Validation")
+    if os.path.isdir(traj_file):
+        search_folder = traj_file
+        found_trajs = glob.glob(os.path.join(search_folder, "**", data_header['trajectory_name']), recursive=True)
+        if len(found_trajs) == 0:
+            log.error(f"Trajectory {traj_file} from data_header not found in {search_folder}")
+            exit(1)
+        if len(found_trajs) > 1:
+            log.warn("More than one file found, choosing first one")
+        traj_file = found_trajs[0]
+    elif not os.path.exists(traj_file):
+        log.error("Trajectory not found! exiting")
+        exit(1)
+    log.debug(f"Loading trajectory from {traj_file}")
+    shots, traj_params = traj_reader(
+        traj_file,
+        dwell_time=traj_reader.keywords['raster_time'] / data_header["oversampling_factor"],
+    )
+    # Need to have image sizes as even to ensure no issues
+    traj_params['img_size'] = np.asarray([
+        size + 1 if size % 2 else size 
+        for size in traj_params['img_size']
+    ])
+    log.info(f"Trajectory Parameters: {traj_params}")
+    data_header["shifts"] = data_header['shifts'][:traj_params["dimension"]]
+    normalized_shifts = (
+        np.array(data_header["shifts"])
+        / np.array(traj_params["FOV"])
+        * np.array(traj_params["img_size"])
+        / 1000
+    )
+    kspace_data = np.squeeze(raw_data).astype(np.complex64)
+    kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
+    kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
+    kspace_data = kspace_data.reshape(kspace_data.shape[0], -1)
+    log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
+    kspace_data = add_phase_to_kspace_with_shifts(
+        kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
+    )
+    try:
+        af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
+        if len(af_string) > 1 and 'd' in af_string[1]:
+            af_caipi = af_string[1].split('d')
+            af_string[1] = af_caipi[0]
+            grappa_recon.keywords['delta'] = int(af_caipi[1])
+        grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+    except:
+        grappa_recon.keywords['af'] = (1, )
+        grappa_recon.keywords['delta'] = 0
+    if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
+        log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
+        log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
+        kspace_loc, kspace_data = do_grappa_and_append_data(
+            kspace_loc,
+            kspace_data,
+            traj_params,
+            grappa_recon,
+            acs=data_header["acs"], # Pass ACS if read in data (external)
+        )
+    if coil_compress != -1:
+        log.info("Compressing coils")
+        kspace_data = np.ascontiguousarray(compress_svd(
+            kspace_data,
+            k_svd=coil_compress,
+            coil_axis=0
+        )).astype(np.complex64)
+    if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
+        log.warn(f"K-space locations are above the unity range, discarding the outlier data")
+        if data_header["type"] == "retro_recon":
+            kspace_loc = discard_frequency_outliers(kspace_loc)
+            kspace_data = np.squeeze(raw_data)
+        else:
+            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
     fourier.keywords['smaps'] = partial(
         fourier.keywords['smaps'],
         kspace_data=kspace_data,
