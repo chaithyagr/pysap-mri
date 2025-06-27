@@ -25,15 +25,18 @@ try:
 except:
     pass
 
-raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)
-
+raw_config = builds(
+    read_arbgrad_rawdat,
+    populate_full_signature=True,
+    zen_partial=True,
+    zen_exclude=["skip_adc_start"]
+)
 traj_config = builds(
     read_trajectory,
     populate_full_signature=True,
     zen_exclude=["dwell_time"],
     zen_partial=True,
 )
-
 density_est_config = builds(
     estimate_density_compensation,
     populate_full_signature=True,

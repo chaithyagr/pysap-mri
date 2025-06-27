@@ -80,6 +80,10 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         log.error("Trajectory not found! exiting")
         exit(1)
     log.debug(f"Loading trajectory from {traj_file}")
+    try:
+        traj_reader.keywords["pre_skip"] = obs_reader.keywords["pre_skip"]
+    except:
+        pass
     shots, traj_params = traj_reader(
         traj_file,
         dwell_time=traj_reader.keywords['raster_time'] / data_header["oversampling_factor"],
