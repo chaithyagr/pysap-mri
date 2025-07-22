@@ -759,7 +759,7 @@ def test_pad(model, L, modulo=16, sigma: float = 0.0):
     padding_h = int(np.ceil(h / modulo) * modulo - h)
     padding_w = int(np.ceil(w / modulo) * modulo - w)
     L = torch.nn.ReplicationPad3d(
-        (0, padding_d, 0, padding_h, 0, padding_w)
+        (0, padding_w, 0, padding_h, 0, padding_d)
     )(L)
     E = model(L, sigma)
     E = E[..., :d, :h, :w]
