@@ -77,8 +77,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             log.warn("More than one file found, choosing first one")
         traj_file = found_trajs[0]
     elif not os.path.exists(traj_file):
-        log.error("Trajectory not found! exiting")
-        exit(1)
+        raise ValueError("Trajectory not found, exiting!")
     log.debug(f"Loading trajectory from {traj_file}")
     shots, traj_params = traj_reader(
         traj_file,
@@ -110,7 +109,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         if len(af_string) > 1 and 'd' in af_string[1]:
             af_caipi = af_string[1].split('d')
             af_string[1] = af_caipi[0]
-            grappa_recon.keywords['delta'] = int(af_caipi[1])
+            #grappa_recon.keywords['delta'] = int(af_caipi[1])
         grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
     except:
         grappa_recon.keywords['af'] = (1, )
