@@ -167,6 +167,10 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     data_header['traj_params'] = traj_params
     save_data_hydra(output_filename, dc_adjoint, data_header)
     if return_data:
+        log.info("Re-scaling the data")
+        K = fourier_op.op(dc_adjoint)
+        alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
+        dc_adjoint *= alpha
         log.info("Returning data")
         return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
     
@@ -288,9 +292,6 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     fourier_op, kspace_data, traj_params, data_header = additional_data
     if remove_dc_for_recon:
         fourier_op.impl.density = None
-    K = fourier_op.op(recon_adjoint)
-    alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
-    recon_adjoint *= alpha
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(recon_adjoint)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
