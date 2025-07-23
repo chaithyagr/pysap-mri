@@ -1,4 +1,6 @@
 import numpy as np
+import scipy as sp
+import warnings
 
 GRAPPA_RECON_AVAILABLE = False
 try:
@@ -15,6 +17,12 @@ def do_grappa_and_append_data(kspace_loc, kspace_data, traj_params, grappa_maker
     if not GRAPPA_RECON_AVAILABLE:
         raise ValueError("GRAPPA is not available")
     gridded_center, new_kspace_data, new_kspace_loc = get_cart_portion_sparkling(kspace_shots, traj_params, kspace_data)
+    if acs is not None:
+        if acs.shape[1] != traj_params['img_size'][0]:
+            warnings.warn("ACS size does not match the image size. Re-sampling")
+            acs = sp.signal.resample(
+                acs, traj_params['img_size'][0], axis=1
+            )
     grappa_recon, grappa_kernel = grappa_maker(
         sig=torch.tensor(gridded_center).permute(0, 2, 3, 1),
         acs=torch.tensor(acs).permute(0, 2, 3, 1) if acs is not None else None,
