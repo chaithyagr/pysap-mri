@@ -116,7 +116,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         grappa_recon.keywords['delta'] = 0
     if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
         log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
-        log.info("GRAPPA AF: %s", grappa_recon.keywords['af'])
+        log.info("GRAPPA args: %s", grappa_recon.keywords)
         kspace_loc, kspace_data = do_grappa_and_append_data(
             kspace_loc,
             kspace_data,
