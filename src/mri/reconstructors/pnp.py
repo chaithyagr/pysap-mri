@@ -56,6 +56,7 @@ def pnp_reconstruct(fourier_op, kspace_data, weights_file: str, initialization: 
         **kwargs_optim,
     )
     algo.fixed_point.show_progress_bar = True
+    algo.fixed_point.verbose = True
     kspace_data = torch.from_numpy(kspace_data).to(device)
     x_est = algo(kspace_data, physics=physics)
     return x_est
