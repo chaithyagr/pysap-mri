@@ -59,8 +59,11 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
     raw_data, data_header = obs_reader(obs_file)
-    if obs_reader.keywords['slice_num'] is not None:
-        data_header['slice_num'] = obs_reader.keywords['slice_num']
+    try:
+        if obs_reader.keywords['slice_num'] is not None:
+            data_header['slice_num'] = obs_reader.keywords['slice_num']
+    except:
+        pass
     log.info(f"Data Header: {data_header}")
     try:
         if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
@@ -134,11 +137,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         )).astype(np.complex64)
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
-        if data_header["type"] == "retro_recon":
-            kspace_loc = discard_frequency_outliers(kspace_loc)
-            kspace_data = np.squeeze(raw_data)
-        else:
-            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
+        kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
     fourier.keywords['smaps'] = partial(
         fourier.keywords['smaps'],
         kspace_data=kspace_data,
@@ -233,6 +232,7 @@ def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: 
     recon_final = recon.cpu().numpy()
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon_final, data_header)
+    return recon
     
     
     
@@ -311,21 +311,11 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         x_init=recon_adjoint, # gain back the first step by initializing with DC Adjoint
         num_iterations=num_iterations,
     )
-    if validation_recon is not None:
-        log.info("getting metrics of the reconstruction")
-        final_metrics = {}
-        for metric, function in metrics.items():
-            final_metrics[metric] = function(recon, validation_recon)
-            final_metrics[f"dc_{metric}"] = function(recon_adjoint, validation_recon)
-        log.info(f"Final Metrics: {final_metrics}")
-        with open(get_outdir_path('metrics.json'), 'w') as f:
-            final_metrics["traj"] = data_header["trajectory_name"]
-            f.write(json.dumps(final_metrics, indent=4))
-        data_header['metrics'] = final_metrics
     data_header['costs'] = costs
     data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon, data_header)
+    return recon
 
 setup_hydra_config()
 store(
