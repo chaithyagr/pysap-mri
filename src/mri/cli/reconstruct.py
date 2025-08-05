@@ -161,6 +161,9 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         pkl.dump(intermediate, open(get_outdir_path('intermediate.pkl'), 'wb'))
     log.info("Getting the DC Adjoint")
     dc_adjoint = fourier_op.adj_op(kspace_data)
+    cg = fourier_op.impl.cg(kspace_data).astype(np.complex64)
+    fourier_op.impl.density = None  # Remove density compensation for reconstruction
+    save_data_hydra("cg_" + output_filename[7:], cg, data_header)
     if not fourier_op.impl.uses_sense:
         dc_adjoint = np.linalg.norm(dc_adjoint, axis=0)
     log.info("Saving DC Adjoint")
