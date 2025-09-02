@@ -6,7 +6,7 @@ from mrinufft.io import read_trajectory
 from mri.operators import NonCartesianFFT, WaveletN
 from mri.optimizers.utils.cost import GenericCost
 from mri.operators.fourier.utils import estimate_density_compensation
-from mrinufft.io.nsp import read_arbgrad_rawdat
+from mrinufft.io.nsp import read_arbgrad_rawdat, read_siemens_rawdat
 from mrinufft.extras.utils import get_smaps
 from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
@@ -25,7 +25,21 @@ try:
 except:
     pass
 
+
+from mri.reconstructors.pnp import pnp_reconstruct
+pnp_config = builds(
+    pnp_reconstruct,
+    zen_exclude=["fourier_op", "kspace_data", "dc_adjoint", "weights_file", "num_iterations"],
+    zen_partial=True,
+    populate_full_signature=True,
+)
+pnp_store = store(group="pnp")
+pnp_store(pnp_config, name="cpu")
+pnp_store(pnp_config, name="gpu", device="cuda")
+        
+    
 raw_config = builds(read_arbgrad_rawdat, populate_full_signature=True, zen_partial=True)
+cart_config = builds(read_siemens_rawdat, populate_full_signature=True, zen_partial=True)
 
 traj_config = builds(
     read_trajectory,
@@ -137,7 +151,7 @@ def setup_hydra_config(verbose=False, multirun_gather=False):
     }
     if multirun_gather:
         callbacks['multirun_gather'] = {
-            '_target_': "hydra_callbacks.MultiRunGatherer",
+                '_target_': "hydra_callbacks.MultiRunGatherer",
             'result_file': "metrics.json",
         }
     store(

@@ -13,7 +13,10 @@ Reweighting optimisation strategies.
 
 
 # Package import
-from pysap.base.utils import flatten
+try: 
+    from pysap.base.utils import flatten
+except ImportError:
+    pass
 
 # Third party import
 import numpy as np

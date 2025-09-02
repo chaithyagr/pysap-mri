@@ -14,11 +14,16 @@ import warnings
 
 import joblib
 import numpy as np
-import pysap
 from joblib import Parallel, delayed
 from modopt.signal.wavelet import filter_convolve, get_mr_filters
-from pysap.base.utils import flatten, unflatten
-from pysap.utils import wavelist
+try:
+    import pysap
+    from pysap.base.utils import flatten, unflatten
+    from pysap.utils import wavelist
+except ImportError:
+    pysap = None
+    flatten = unflatten = None
+    wavelist = None
 
 from ..base import OperatorBase
 
