@@ -161,8 +161,12 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         pkl.dump(intermediate, open(get_outdir_path('intermediate.pkl'), 'wb'))
     log.info("Getting the DC Adjoint")
     dc_adjoint = fourier_op.adj_op(kspace_data)
-    cg = fourier_op.impl.cg(kspace_data).astype(np.complex64)
+    log.info("Re-scaling the data")
+    K = fourier_op.op(dc_adjoint)
+    alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
+    dc_adjoint *= alpha
     fourier_op.impl.density = None  # Remove density compensation for reconstruction
+    cg = fourier_op.impl.cg(kspace_data, x_init=dc_adjoint)
     save_data_hydra("cg_" + output_filename[7:], cg, data_header)
     if not fourier_op.impl.uses_sense:
         dc_adjoint = np.linalg.norm(dc_adjoint, axis=0)
@@ -170,10 +174,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     data_header['traj_params'] = traj_params
     save_data_hydra(output_filename, dc_adjoint, data_header)
     if return_data:
-        log.info("Re-scaling the data")
-        K = fourier_op.op(dc_adjoint)
-        alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
-        dc_adjoint *= alpha
         log.info("Returning data")
         return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
     
