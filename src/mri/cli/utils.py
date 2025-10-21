@@ -16,12 +16,14 @@ try:
     from ggrappa.grappaND import GRAPPA_Recon
     grappa_config = builds(
         GRAPPA_Recon,
-        zen_exclude=["sig", "acs", "isGolfSparks", "quiet", "af"],
+        zen_exclude=["sig", "acs", "isGolfSparks", "quiet"],
         zen_partial=True,        
         populate_full_signature=True,
     )
     grappa_store = store(group="grappa_recon")
-    grappa_store(grappa_config, name="disable")
+    grappa_store(grappa_config, name="enable", af=1)
+    grappa_store(grappa_config, name="disable", af=0)
+    
 except:
     pass
 

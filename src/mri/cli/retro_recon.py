@@ -51,7 +51,8 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         traj_file,
         dwell_time='min_osf',
     )
-    kspace_loc = discard_frequency_outliers(shots.reshape(-1, traj_params["dimension"]))
+    shots = np.clip(shots, -0.5, 0.5)
+    kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
     forward_op = forward(kspace_loc, traj_params["img_size"], n_coils=image.shape[0])
     kspace_data = forward_op.op(image)
     
@@ -88,7 +89,7 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         coil_compress=coil_compress,
         algorithm=algorithm,
         debug=debug,
-        obs_reader=lambda x: (kspace_data, data_header),
+        obs_reader=lambda x: (kspace_data.reshape(kspace_data.shape[0], shots.shape[0], -1), data_header),
         traj_reader=traj_reader,
         fourier=fourier,
         linear=linear,

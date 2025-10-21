@@ -107,17 +107,37 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
     )
-    try:
-        af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
-        if len(af_string) > 1 and 'd' in af_string[1]:
-            af_caipi = af_string[1].split('d')
-            af_string[1] = af_caipi[0]
-            if int(af_caipi[1])>0:
-                grappa_recon.keywords['delta'] = int(af_caipi[1])
-        grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
-    except:
-        grappa_recon.keywords['af'] = (1, )
-        grappa_recon.keywords['delta'] = 0
+    if grappa_recon is not None:
+        if grappa_recon.keywords['af'] == 0:
+            if 'acs' in data_header:
+                log.info("ACS found in data, but GRAPPA disabled, using ACS data for Smaps estimation")
+                from sigpy.mri.app import EspiritCalib
+                import cupy as cp
+                from cupyx.scipy.ndimage import zoom
+                smaps = np.zeros((data_header['n_coils'], ) + tuple(traj_params['img_size']), dtype=np.complex64)
+                acs_shape = data_header['acs'].shape
+                y_start, z_start = (traj_params['img_size'][1:] - acs_shape[2:]) // 2
+                x_start = (traj_params['img_size'][0] - acs_shape[-1]) // 2
+                # Place ACS in the center
+                smaps[:, x_start:x_start+acs_shape[-1], y_start:y_start+acs_shape[-2], z_start:z_start+acs_shape[-1]] = data_header['acs'][:, x_start:x_start+acs_shape[-1]]
+                #S = EspiritCalib(data_header['acs'], calib_width=24, crop=0.95, thresh=0.02, device=cp.cuda.Device(0)).run()
+                smaps = np.fft.ifftshift(np.fft.ifftn(np.fft.fftshift(smaps, axes=(-3, -2, -1)), axes=(-3, -2, -1)), axes=(-3, -2, -1))
+                SOS = np.linalg.norm(smaps, axis=0)
+                smaps = smaps / (SOS + 1e-8)
+                #smaps = EspiritCalib(data_header['acs'], calib_width=24, crop=0.95, thresh=0.01, device=cp.cuda.Device(0)).run()
+                #smaps = zoom(smaps, (1, ) + tuple(np.array(traj_params['img_size'])/np.array(data_header['acs'].shape[1:])), order=3).get()
+                fourier.keywords['smaps'] = smaps
+        try:
+            af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
+            if len(af_string) > 1 and 'd' in af_string[1]:
+                af_caipi = af_string[1].split('d')
+                af_string[1] = af_caipi[0]
+                if int(af_caipi[1])>0:
+                    grappa_recon.keywords['delta'] = int(af_caipi[1])
+            grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+        except:
+            grappa_recon.keywords['af'] = (1, )
+            grappa_recon.keywords['delta'] = 0
     if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
         log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
         log.info("GRAPPA args: %s", grappa_recon.keywords)
@@ -138,10 +158,11 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
         kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
-    fourier.keywords['smaps'] = partial(
-        fourier.keywords['smaps'],
-        kspace_data=kspace_data,
-    )
+    if isinstance(fourier.keywords['smaps'], partial):
+        fourier.keywords['smaps'] = partial(
+            fourier.keywords['smaps'],
+            kspace_data=kspace_data,
+        )
     fourier_op = fourier(
         kspace_loc,
         traj_params["img_size"],
@@ -162,7 +183,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     log.info("Getting the DC Adjoint")
     dc_adjoint = fourier_op.adj_op(kspace_data)
     cg = fourier_op.impl.cg(kspace_data).astype(np.complex64)
-    fourier_op.impl.density = None  # Remove density compensation for reconstruction
     save_data_hydra("cg_" + output_filename[7:], cg, data_header)
     if not fourier_op.impl.uses_sense:
         dc_adjoint = np.linalg.norm(dc_adjoint, axis=0)
@@ -331,7 +351,7 @@ store(
         "_self_",
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
-        {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
+        {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
     ],
     name="dc_adjoint",
@@ -349,7 +369,7 @@ store(
         "_self_",
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
-        {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
+        {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
         {"linear": "gpu"},
         {"sparsity": "weighted_sparse"},
@@ -368,7 +388,7 @@ store(
     hydra_defaults=[
         "_self_",
         {"fourier": "gpu_lowmem"},
-        {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
+        {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/density_comp": "pipe_lowmem"},
         {"fourier/smaps": "low_frequency"},
     ],
@@ -384,7 +404,7 @@ store(
         "_self_",
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
-        {"grappa_recon": "disable"} if GRAPPA_RECON_AVAILABLE else {},
+        {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
         {"pnp": "gpu"}
     ],
