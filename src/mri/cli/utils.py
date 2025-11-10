@@ -7,7 +7,7 @@ from mri.operators import NonCartesianFFT, WaveletN
 from mri.optimizers.utils.cost import GenericCost
 from mri.operators.fourier.utils import estimate_density_compensation
 from mrinufft.io.nsp import read_arbgrad_rawdat, read_siemens_rawdat
-from mrinufft.extras.utils import get_smaps
+from mrinufft.extras.smaps import get_smaps
 from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
 import os

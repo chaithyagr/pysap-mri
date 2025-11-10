@@ -5,6 +5,7 @@ from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdi
 from mri.operators.fourier.utils import discard_frequency_outliers
 from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
 from pymrt.recipes.coils import compress_svd
+from mrinufft.extras.smaps import cartesian_espirit
 from mri.reconstructors import SelfCalibrationReconstructor
 from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_AVAILABLE
 
@@ -107,26 +108,14 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
     )
-    if grappa_recon is not None:
-        if grappa_recon.keywords['af'] == 0:
-            if 'acs' in data_header:
-                log.info("ACS found in data, but GRAPPA disabled, using ACS data for Smaps estimation")
-                from sigpy.mri.app import EspiritCalib
-                import cupy as cp
-                from cupyx.scipy.ndimage import zoom
-                smaps = np.zeros((data_header['n_coils'], ) + tuple(traj_params['img_size']), dtype=np.complex64)
-                acs_shape = data_header['acs'].shape
-                y_start, z_start = (traj_params['img_size'][1:] - acs_shape[2:]) // 2
-                x_start = (traj_params['img_size'][0] - acs_shape[-1]) // 2
-                # Place ACS in the center
-                smaps[:, x_start:x_start+acs_shape[-1], y_start:y_start+acs_shape[-2], z_start:z_start+acs_shape[-1]] = data_header['acs'][:, x_start:x_start+acs_shape[-1]]
-                #S = EspiritCalib(data_header['acs'], calib_width=24, crop=0.95, thresh=0.02, device=cp.cuda.Device(0)).run()
-                smaps = np.fft.ifftshift(np.fft.ifftn(np.fft.fftshift(smaps, axes=(-3, -2, -1)), axes=(-3, -2, -1)), axes=(-3, -2, -1))
-                SOS = np.linalg.norm(smaps, axis=0)
-                smaps = smaps / (SOS + 1e-8)
-                #smaps = EspiritCalib(data_header['acs'], calib_width=24, crop=0.95, thresh=0.01, device=cp.cuda.Device(0)).run()
-                #smaps = zoom(smaps, (1, ) + tuple(np.array(traj_params['img_size'])/np.array(data_header['acs'].shape[1:])), order=3).get()
-                fourier.keywords['smaps'] = smaps
+    if 'acs' in data_header:
+        # Estimate the Smaps using ESPIRiT
+        log.info("Estimating Smaps from ACS data using ESPIRiT")
+        import cupy as cp
+        Smaps = cartesian_espirit(cp.asarray(data_header['acs'], dtype=cp.complex64), traj_params['img_size'], decim=4)
+        fourier.keywords['smaps'] = np.ascontiguousarray(Smaps.get())
+        del Smaps
+    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']) > 1:
         try:
             af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
             if len(af_string) > 1 and 'd' in af_string[1]:
@@ -138,7 +127,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         except:
             grappa_recon.keywords['af'] = (1, )
             grappa_recon.keywords['delta'] = 0
-    if grappa_recon is not None and np.prod(grappa_recon.keywords['af'])>1:
+    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']) > 1:
         log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
         log.info("GRAPPA args: %s", grappa_recon.keywords)
         kspace_loc, kspace_data = do_grappa_and_append_data(
@@ -165,7 +154,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         )
     fourier_op = fourier(
         kspace_loc,
-        traj_params["img_size"],
+        (int(i) for i in traj_params["img_size"]),
         n_coils=data_header["n_coils"] if coil_compress == -1 else coil_compress,
     )
     if debug > 0:
@@ -182,20 +171,16 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         pkl.dump(intermediate, open(get_outdir_path('intermediate.pkl'), 'wb'))
     log.info("Getting the DC Adjoint")
     dc_adjoint = fourier_op.adj_op(kspace_data)
-    cg = fourier_op.impl.cg(kspace_data).astype(np.complex64)
-    save_data_hydra("cg_" + output_filename[7:], cg, data_header)
+    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
+    save_data_hydra("pinv_" + output_filename[7:], pinv, data_header)
     if not fourier_op.impl.uses_sense:
         dc_adjoint = np.linalg.norm(dc_adjoint, axis=0)
     log.info("Saving DC Adjoint")
     data_header['traj_params'] = traj_params
     save_data_hydra(output_filename, dc_adjoint, data_header)
     if return_data:
-        log.info("Re-scaling the data")
-        K = fourier_op.op(dc_adjoint)
-        alpha = np.mean(np.linalg.norm(kspace_data, axis=0)) / np.mean(np.linalg.norm(K, axis=0))
-        dc_adjoint *= alpha
         log.info("Returning data")
-        return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
+        return pinv, (fourier_op, kspace_data, traj_params, data_header)
     
     
     
