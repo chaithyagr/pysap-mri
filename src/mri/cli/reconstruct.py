@@ -115,7 +115,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         Smaps = cartesian_espirit(cp.asarray(data_header['acs'], dtype=cp.complex64), traj_params['img_size'], decim=4)
         fourier.keywords['smaps'] = np.ascontiguousarray(Smaps.get())
         del Smaps
-    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']) > 1:
+    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']):
         try:
             af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
             if len(af_string) > 1 and 'd' in af_string[1]:
@@ -171,8 +171,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         pkl.dump(intermediate, open(get_outdir_path('intermediate.pkl'), 'wb'))
     log.info("Getting the DC Adjoint")
     dc_adjoint = fourier_op.adj_op(kspace_data)
-    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
-    save_data_hydra("pinv_" + output_filename[7:], pinv, data_header)
     if not fourier_op.impl.uses_sense:
         dc_adjoint = np.linalg.norm(dc_adjoint, axis=0)
     log.info("Saving DC Adjoint")
@@ -180,7 +178,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     save_data_hydra(output_filename, dc_adjoint, data_header)
     if return_data:
         log.info("Returning data")
-        return pinv, (fourier_op, kspace_data, traj_params, data_header)
+        return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
     
     
     
@@ -301,8 +299,10 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     fourier_op, kspace_data, traj_params, data_header = additional_data
     if remove_dc_for_recon:
         fourier_op.impl.density = None
+    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations//2).astype(np.complex64)
+    save_data_hydra("pinv_" + output_filename, pinv, data_header)
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
-    linear_op.op(recon_adjoint)
+    linear_op.op(pinv)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
     log.info("Setting up reconstructor")
     reconstructor = SelfCalibrationReconstructor(
@@ -316,7 +316,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     recon, costs, metrics_iter = reconstructor.reconstruct(
         kspace_data=kspace_data,
         optimization_alg=algorithm,
-        x_init=recon_adjoint, # gain back the first step by initializing with DC Adjoint
+        x_init=pinv, # gain back the first step by initializing with DC Adjoint
         num_iterations=num_iterations,
     )
     data_header['costs'] = costs
