@@ -4,8 +4,7 @@ from mri.io.output import save_data
 from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path
 from mri.operators.fourier.utils import discard_frequency_outliers
 from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
-from pymrt.recipes.coils import compress_svd
-from mrinufft.extras.smaps import cartesian_espirit
+from mrinufft.extras.smaps import cartesian_espirit, coil_compression
 from mri.reconstructors import SelfCalibrationReconstructor
 from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_AVAILABLE
 
@@ -108,13 +107,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     kspace_data = add_phase_to_kspace_with_shifts(
         kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
     )
-    if 'acs' in data_header:
-        # Estimate the Smaps using ESPIRiT
-        log.info("Estimating Smaps from ACS data using ESPIRiT")
-        import cupy as cp
-        Smaps = cartesian_espirit(cp.asarray(data_header['acs'], dtype=cp.complex64), traj_params['img_size'], decim=4)
-        fourier.keywords['smaps'] = np.ascontiguousarray(Smaps.get())
-        del Smaps
     if grappa_recon is not None and np.prod(grappa_recon.keywords['af']):
         try:
             af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
@@ -139,11 +131,24 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         )
     if coil_compress != -1:
         log.info("Compressing coils")
-        kspace_data = np.ascontiguousarray(compress_svd(
+        kspace_data, V = coil_compression(
             kspace_data,
-            k_svd=coil_compress,
-            coil_axis=0
-        )).astype(np.complex64)
+            K=coil_compress,
+            return_V=True,
+        )
+    if 'acs' in data_header:
+        # Estimate the Smaps using ESPIRiT
+        log.info("Estimating Smaps from ACS data using ESPIRiT")
+        import cupy as cp
+        acs_data = cp.asarray(data_header['acs'], dtype=cp.complex64)
+        if coil_compress != -1:
+            acs_data = (
+                cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
+            ).reshape((-1, *data_header['acs'].shape[1:]))
+            del V
+        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4)
+        fourier.keywords['smaps'] = np.ascontiguousarray(Smaps.get())
+        del Smaps
     if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
         log.warn(f"K-space locations are above the unity range, discarding the outlier data")
         kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
