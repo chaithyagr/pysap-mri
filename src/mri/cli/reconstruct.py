@@ -154,7 +154,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         )
     fourier_op = fourier(
         kspace_loc,
-        (int(i) for i in traj_params["img_size"]),
+        tuple(int(i) for i in traj_params["img_size"]),
         n_coils=data_header["n_coils"] if coil_compress == -1 else coil_compress,
     )
     if debug > 0:
