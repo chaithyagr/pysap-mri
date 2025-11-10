@@ -330,7 +330,7 @@ store(
     dc_adjoint,
     obs_reader=raw_config,
     traj_reader=traj_config,
-    coil_compress=10,
+    coil_compress=-1,
     debug=0,
     hydra_defaults=[
         "_self_",
@@ -347,7 +347,7 @@ store(
     traj_reader=traj_config,
     algorithm="pogm",
     num_iterations=10,
-    coil_compress=10,
+    coil_compress=-1,
     mu=1e-7,
     debug=0,
     hydra_defaults=[
