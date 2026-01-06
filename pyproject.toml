@@ -21,7 +21,7 @@ dependencies = [
     "scikit-learn>=0.19.1",
     "scipy>=1.3.0",
     "pydicom",
-    "python-pysap",
+    "python-pysap>0.2.1",
 ]
 license = {text = "CeCILL-B"}
 requires-python = ">=3.10"
