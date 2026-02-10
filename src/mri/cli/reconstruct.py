@@ -1,8 +1,10 @@
 from hydra_zen import store, zen
 
 from mri.io.output import save_data
+from mrinufft.io import read_siemens_rawdat
+from mri.operators import FFT
 from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path
-from mri.operators.fourier.utils import discard_frequency_outliers
+from mri.operators.fourier.utils import discard_frequency_outliers, convert_mask_to_locations
 from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
 from mrinufft.extras.smaps import cartesian_espirit, coil_compression
 from mri.reconstructors import SelfCalibrationReconstructor
@@ -58,77 +60,91 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     None
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
-    raw_data, data_header = obs_reader(obs_file)
-    try:
-        if obs_reader.keywords['slice_num'] is not None:
-            data_header['slice_num'] = obs_reader.keywords['slice_num']
-    except:
-        pass
-    log.info(f"Data Header: {data_header}")
-    try:
-        if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
-            log.warn("Trajectory file does not match the trajectory in the data file")
-    except KeyError:
-        log.warn("Trajectory name not found in data header, Skipped Validation")
-    if os.path.isdir(traj_file):
-        search_folder = traj_file
-        found_trajs = glob.glob(os.path.join(search_folder, "**", data_header['trajectory_name']), recursive=True)
-        if len(found_trajs) == 0:
-            log.error(f"Trajectory {traj_file} from data_header not found in {search_folder}")
-            exit(1)
-        if len(found_trajs) > 1:
-            log.warn("More than one file found, choosing first one")
-        traj_file = found_trajs[0]
-    elif not os.path.exists(traj_file):
-        raise ValueError("Trajectory not found, exiting!")
-    log.debug(f"Loading trajectory from {traj_file}")
-    shots, traj_params = traj_reader(
-        traj_file,
-        dwell_time=traj_reader.keywords['raster_time'] / data_header["oversampling_factor"],
-    )
-    # Need to have image sizes as even to ensure no issues
-    traj_params['img_size'] = np.asarray([
-        size + 1 if size % 2 else size 
-        for size in traj_params['img_size']
-    ])
-    log.info(f"Trajectory Parameters: {traj_params}")
-    data_header["shifts"] = data_header['shifts'][:traj_params["dimension"]]
-    normalized_shifts = (
-        np.array(data_header["shifts"])
-        / np.array(traj_params["FOV"])
-        * np.array(traj_params["img_size"])
-        / 1000
-    )
-    kspace_data = np.squeeze(raw_data).astype(np.complex64)
-    kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
-    kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
-    kspace_data = kspace_data.reshape(kspace_data.shape[0], -1)
-    log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
-    kspace_data = add_phase_to_kspace_with_shifts(
-        kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
-    )
-    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']):
+    if traj_file == "cart":
+        log.info("It is cartesian trajectory")
+        raw_data, data_header = read_siemens_rawdat(obs_file, removeOS=True)
+        mask = np.linalg.norm(raw_data, axis=0)>0
+        kspace_loc = convert_mask_to_locations(mask)
+        traj_params = {
+            "img_size": raw_data.shape[1:],
+            "num_shots": np.sum(mask[0]),
+            "num_samples_per_shot": raw_data.shape[1],
+        }
+    else:
+        raw_data, data_header = obs_reader(obs_file)
         try:
-            af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
-            if len(af_string) > 1 and 'd' in af_string[1]:
-                af_caipi = af_string[1].split('d')
-                af_string[1] = af_caipi[0]
-                if int(af_caipi[1])>0:
-                    grappa_recon.keywords['delta'] = int(af_caipi[1])
-            grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+            if obs_reader.keywords['slice_num'] is not None:
+                data_header['slice_num'] = obs_reader.keywords['slice_num']
         except:
-            grappa_recon.keywords['af'] = (1, )
-            grappa_recon.keywords['delta'] = 0
-    if grappa_recon is not None and np.prod(grappa_recon.keywords['af']) > 1:
-        log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
-        log.info("GRAPPA args: %s", grappa_recon.keywords)
-        kspace_loc, kspace_data = do_grappa_and_append_data(
-            kspace_loc,
-            kspace_data,
-            traj_params,
-            grappa_recon,
-            acs=data_header["acs"], # Pass ACS if read in data (external)
+            pass
+        log.info(f"Data Header: {data_header}")
+        try:
+            if not os.path.isdir(traj_file) and data_header["trajectory_name"] != os.path.basename(traj_file):
+                log.warn("Trajectory file does not match the trajectory in the data file")
+        except KeyError:
+            log.warn("Trajectory name not found in data header, Skipped Validation")
+        if os.path.isdir(traj_file):
+            search_folder = traj_file
+            found_trajs = glob.glob(os.path.join(search_folder, "**", data_header['trajectory_name']), recursive=True)
+            if len(found_trajs) == 0:
+                log.error(f"Trajectory {traj_file} from data_header not found in {search_folder}")
+                exit(1)
+            if len(found_trajs) > 1:
+                log.warn("More than one file found, choosing first one")
+            traj_file = found_trajs[0]
+        elif not os.path.exists(traj_file):
+            raise ValueError("Trajectory not found, exiting!")
+        log.debug(f"Loading trajectory from {traj_file}")
+        shots, traj_params = traj_reader(
+            traj_file,
+            dwell_time=traj_reader.keywords['raster_time'] / data_header["oversampling_factor"],
         )
+        # Need to have image sizes as even to ensure no issues
+        traj_params['img_size'] = np.asarray([
+            size + 1 if size % 2 else size 
+            for size in traj_params['img_size']
+        ])
+        log.info(f"Trajectory Parameters: {traj_params}")
+        data_header["shifts"] = data_header['shifts'][:traj_params["dimension"]]
+        normalized_shifts = (
+            np.array(data_header["shifts"])
+            / np.array(traj_params["FOV"])
+            * np.array(traj_params["img_size"])
+            / 1000
+        )
+        kspace_data = np.squeeze(raw_data).astype(np.complex64)
+        kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
+        kspace_data = remove_extra_kspace_samples(kspace_data, shots.shape[1])
+        kspace_data = kspace_data.reshape(kspace_data.shape[0], -1)
+        log.info(f"Phase shifting raw data for Normalized shifts: {normalized_shifts}")
+        kspace_data = add_phase_to_kspace_with_shifts(
+            kspace_data, kspace_loc.reshape(-1, traj_params["dimension"]), normalized_shifts
+        )
+        if grappa_recon is not None and np.prod(grappa_recon.keywords['af']):
+            try:
+                af_string = data_header['trajectory_name'].split('_G')[1].split('_')[0].split('x')
+                if len(af_string) > 1 and 'd' in af_string[1]:
+                    af_caipi = af_string[1].split('d')
+                    af_string[1] = af_caipi[0]
+                    if int(af_caipi[1])>0:
+                        grappa_recon.keywords['delta'] = int(af_caipi[1])
+                grappa_recon.keywords['af'] = tuple([int(float(af)) for af in af_string])
+            except:
+                grappa_recon.keywords['af'] = (1, )
+                grappa_recon.keywords['delta'] = 0
+        if grappa_recon is not None and np.prod(grappa_recon.keywords['af']) > 1:
+            log.info("Performing GRAPPA Reconstruction: AF: %s", af_string)
+            log.info("GRAPPA args: %s", grappa_recon.keywords)
+            kspace_loc, kspace_data = do_grappa_and_append_data(
+                kspace_loc,
+                kspace_data,
+                traj_params,
+                grappa_recon,
+                acs=data_header["acs"], # Pass ACS if read in data (external)
+            )
+        if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
+            log.warn(f"K-space locations are above the unity range, discarding the outlier data")
+            kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
     if coil_compress != -1:
         log.info("Compressing coils")
         kspace_data, V = coil_compression(
@@ -146,21 +162,18 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
             ).reshape((-1, *data_header['acs'].shape[1:]))
             del V
-        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4)
-        fourier.keywords['smaps'] = np.ascontiguousarray(Smaps.get())
+        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4).get()
+        fourier.keywords['smaps'] = np.ascontiguousarray(Smaps)
         del Smaps
-    if kspace_loc.max() > 0.5 or kspace_loc.min() < 0.5:
-        log.warn(f"K-space locations are above the unity range, discarding the outlier data")
-        kspace_loc, kspace_data = discard_frequency_outliers(kspace_loc, kspace_data)
     if isinstance(fourier.keywords['smaps'], partial):
         fourier.keywords['smaps'] = partial(
             fourier.keywords['smaps'],
             kspace_data=kspace_data,
         )
     fourier_op = fourier(
-        kspace_loc,
-        tuple(int(i) for i in traj_params["img_size"]),
-        n_coils=data_header["n_coils"] if coil_compress == -1 else coil_compress,
+            kspace_loc,
+            tuple(int(i) for i in traj_params["img_size"]),
+            n_coils=data_header["n_coils"] if coil_compress == -1 else coil_compress,
     )
     if debug > 0:
         intermediate = {
@@ -304,8 +317,9 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     fourier_op, kspace_data, traj_params, data_header = additional_data
     if remove_dc_for_recon:
         fourier_op.impl.density = None
-    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations//2).astype(np.complex64)
-    save_data_hydra("pinv_" + output_filename, pinv, data_header)
+    if traj_file != "cart":
+        pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations).astype(np.complex64)
+        save_data_hydra("pinv_" + output_filename, pinv, data_header)
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(pinv)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
