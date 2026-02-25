@@ -159,7 +159,7 @@ def setup_hydra_config(verbose=False, multirun_gather=False):
     store(
         HydraConf(
             job=JobConf(name="recon"),
-            sweep=SweepDir(dir=os.path.join(outdir, "${hydra.job.name}") + "/${now:%Y-%m-%d-%H-%M-%S}"),
+            sweep=SweepDir(dir=os.path.join(outdir, "${hydra.job.name}") + "/${now:%Y-%m-%d-%H-%M-%S}", subdir="${obs_file}"),
             callbacks=callbacks,
             verbose=verbose,
         )
