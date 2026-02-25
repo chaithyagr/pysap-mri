@@ -329,7 +329,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     recon, costs, metrics_iter = reconstructor.reconstruct(
         kspace_data=kspace_data,
         optimization_alg=algorithm,
-        x_init=pinv, # gain back the first step by initializing with DC Adjoint
+        x_init=pinv,
         num_iterations=num_iterations,
     )
     data_header['costs'] = costs
