@@ -262,7 +262,7 @@ def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: 
     
 def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
           algorithm: str, debug: int, obs_reader, traj_reader, fourier, linear, sparsity,
-          output_filename: str = "recon.nii", remove_dc_for_recon: bool = True, validation_recon: np.ndarray = None, metrics: dict = None, 
+          output_filename: str = "recon.nii", validation_recon: np.ndarray = None, metrics: dict = None, 
           grappa_recon=None, recon_type: str = "cs", **kwargs):
     """Reconstructs an MRI image using the given parameters.
 
@@ -294,9 +294,6 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         Object representing the sparsity operator.
     output_filename : str, optional
         Path to save the reconstructed image, by default "recon.pkl"
-    remove_dc_for_recon: bool, optional
-        Whether to remove the density compensation for reconstruction, by default True
-        Note that it will still be used to estimate x_init
     validation_recon: np.ndarray, optional
         The validation reconstruction to compare the results with, by default None
     metrics: dict, optional
@@ -315,11 +312,8 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         return_data=True,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
-    if remove_dc_for_recon:
-        fourier_op.impl.density = None
-    if traj_file != "cart":
-        pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations).astype(np.complex64)
-        save_data_hydra("pinv_" + output_filename, pinv, data_header)
+    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations).astype(np.complex64)
+    save_data_hydra("pinv_" + output_filename, pinv, data_header)
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(pinv)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
