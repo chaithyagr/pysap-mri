@@ -60,7 +60,11 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     None
         The reconstructed image is saved as 'dc_adjoint.pkl' file.
     """
-    if traj_file == "cart":
+    try:
+        raw_data, data_header = obs_reader(obs_file)
+    except:
+        traj_file == "cart"
+    if traj_file == "cart":    
         log.info("It is cartesian trajectory")
         raw_data, data_header = read_siemens_rawdat(obs_file, removeOS=True)
         mask = np.linalg.norm(raw_data, axis=0)>0
@@ -70,8 +74,8 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             "num_shots": np.sum(mask[0]),
             "num_samples_per_shot": raw_data.shape[1],
         }
+        kspace_data = np.ascontiguousarray(raw_data[:, mask])
     else:
-        raw_data, data_header = obs_reader(obs_file)
         try:
             if obs_reader.keywords['slice_num'] is not None:
                 data_header['slice_num'] = obs_reader.keywords['slice_num']
@@ -152,7 +156,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
             K=coil_compress,
             return_V=True,
         )
-    if 'acs' in data_header:
+    if 'acs' in data_header and data_header['acs'] is not None:
         # Estimate the Smaps using ESPIRiT
         log.info("Estimating Smaps from ACS data using ESPIRiT")
         import cupy as cp
@@ -162,7 +166,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
             ).reshape((-1, *data_header['acs'].shape[1:]))
             del V
-        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4).get()
+        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4, crop=0).get()
         fourier.keywords['smaps'] = np.ascontiguousarray(Smaps)
         del Smaps
     if isinstance(fourier.keywords['smaps'], partial):
@@ -318,6 +322,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     linear_op.op(pinv)
     sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
     log.info("Setting up reconstructor")
+    fourier_op.impl.density = None
     reconstructor = SelfCalibrationReconstructor(
         fourier_op=fourier_op,
         linear_op=linear_op,
@@ -332,6 +337,38 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         x_init=pinv,
         num_iterations=num_iterations,
     )
+    """
+    from deepinv.optim.prior import WaveletPrior
+    from deepinv.optim.data_fidelity import L2
+    from deepinv.optim.optimizers import optim_builder
+    import torch
+    fourier_op.impl.squeeze_dims = False
+    physics = fourier_op.impl.make_deepinv_phy()
+    wavelet = WaveletPrior(
+        wv="sym8",
+        wvdim=3,
+        level=3,
+        is_complex=True,
+    )
+    data_fidelity = L2()
+    # Algorithm parameters
+    lamb = 1e-5
+    stepsize = 0.8 * float(1 / fourier_op.impl.get_lipschitz_cst(100))
+    params_algo = {"stepsize": stepsize, "lambda": lamb, "a": 3}
+    max_iter = 100
+    early_stop = True
+    wavelet_recon = optim_builder(
+        iteration="FISTA",
+        prior=wavelet,
+        data_fidelity=data_fidelity,
+        early_stop=early_stop,
+        max_iter=max_iter,
+        params_algo=params_algo,
+        verbose=True,
+        show_progress_bar=True,
+    )
+    x_wavelet = wavelet_recon(torch.from_numpy(kspace_data).to(torch.complex64).to("cuda"), physics, init=(torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64), torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64)))
+    """
     data_header['costs'] = costs
     data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
