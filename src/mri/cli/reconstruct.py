@@ -316,7 +316,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         return_data=True,
     )
     fourier_op, kspace_data, traj_params, data_header = additional_data
-    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=num_iterations).astype(np.complex64)
+    pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
     save_data_hydra("pinv_" + output_filename, pinv, data_header)
     linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
     linear_op.op(pinv)
