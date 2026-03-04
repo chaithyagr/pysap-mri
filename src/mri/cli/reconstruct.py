@@ -63,7 +63,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     try:
         raw_data, data_header = obs_reader(obs_file)
     except:
-        traj_file == "cart"
+        traj_file = "cart"
     if traj_file == "cart":    
         log.info("It is cartesian trajectory")
         raw_data, data_header = read_siemens_rawdat(obs_file, removeOS=True)
