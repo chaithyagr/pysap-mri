@@ -11,6 +11,8 @@ from mrinufft.extras.smaps import get_smaps
 from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
 import os
+from deepinv.optim.prior import WaveletPrior, TVPrior
+
 
 try:
     from ggrappa.grappaND import GRAPPA_Recon
@@ -71,13 +73,31 @@ fourier_op_config = builds(
     zen_exclude=["n_coils"],
     zen_partial=True,
 )
-linear_config = builds(
+
+# Regularizers
+wavelet_local_config = builds(
     WaveletN,
     populate_full_signature=True,
     zen_partial=True,
     wavelet_name="sym8",
     nb_scale=3,
     zen_exclude=["shape"]
+)
+wavelet_deepinv_config = builds(
+    WaveletPrior,
+    populate_full_signature=True,
+    zen_partial=True,
+    wv="sym8",
+    level=3,
+    is_complex=True,
+    device="cuda",
+    zen_exclude=["wvdim"],
+)
+tv_deepinv_config = builds(
+    TVPrior,
+    populate_full_signature=True,
+    zen_partial=True,
+    n_it_max=5,
 )
 sparsity_config = builds(
     WeightedSparseThreshold,
@@ -114,7 +134,9 @@ density_store(density_est_config, implementation="pipe", name="pipe")
 density_store(density_est_config, implementation="pipe", osf=1, name="pipe_lowmem")
 
 linear_store = store(group="linear")
-linear_store(linear_config, name="gpu")
+linear_store(wavelet_local_config, name="cpu_wv")
+linear_store(wavelet_deepinv_config, name="deepinv_wv")
+#linear_store(tv_deepinv_config, name="deepinv_tv")
 
 sparsity_store = store(group="sparsity")
 sparsity_store(sparsity_config, name="weighted_sparse")

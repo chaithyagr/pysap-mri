@@ -9,7 +9,11 @@ from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspa
 from mrinufft.extras.smaps import cartesian_espirit, coil_compression
 from mri.reconstructors import SelfCalibrationReconstructor
 from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_AVAILABLE
-
+from deepinv.optim.data_fidelity import L2
+from deepinv.optim.optimizers import optim_builder
+import torch
+    
+    
 import json
 import numpy as np
 import pickle as pkl
@@ -166,7 +170,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
             ).reshape((-1, *data_header['acs'].shape[1:]))
             del V
-        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4, crop=0).get()
+        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4).get()
         fourier.keywords['smaps'] = np.ascontiguousarray(Smaps)
         del Smaps
     if isinstance(fourier.keywords['smaps'], partial):
@@ -318,57 +322,55 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     fourier_op, kspace_data, traj_params, data_header = additional_data
     pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
     save_data_hydra("pinv_" + output_filename, pinv, data_header)
-    linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
-    linear_op.op(pinv)
-    sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
-    log.info("Setting up reconstructor")
-    fourier_op.impl.density = None
-    reconstructor = SelfCalibrationReconstructor(
-        fourier_op=fourier_op,
-        linear_op=linear_op,
-        regularizer_op=sparse_op,
-        verbose=1,
-        lipschitz_cst=fourier_op.impl.get_lipschitz_cst(),
-    )
-    log.info("Starting reconstruction")
-    recon, costs, metrics_iter = reconstructor.reconstruct(
-        kspace_data=kspace_data,
-        optimization_alg=algorithm,
-        x_init=pinv,
-        num_iterations=num_iterations,
-    )
-    """
-    from deepinv.optim.prior import WaveletPrior
-    from deepinv.optim.data_fidelity import L2
-    from deepinv.optim.optimizers import optim_builder
-    import torch
-    fourier_op.impl.squeeze_dims = False
-    physics = fourier_op.impl.make_deepinv_phy()
-    wavelet = WaveletPrior(
-        wv="sym8",
-        wvdim=3,
-        level=3,
-        is_complex=True,
-    )
-    data_fidelity = L2()
-    # Algorithm parameters
-    lamb = 1e-5
-    stepsize = 0.8 * float(1 / fourier_op.impl.get_lipschitz_cst(100))
-    params_algo = {"stepsize": stepsize, "lambda": lamb, "a": 3}
-    max_iter = 100
-    early_stop = True
-    wavelet_recon = optim_builder(
-        iteration="FISTA",
-        prior=wavelet,
-        data_fidelity=data_fidelity,
-        early_stop=early_stop,
-        max_iter=max_iter,
-        params_algo=params_algo,
-        verbose=True,
-        show_progress_bar=True,
-    )
-    x_wavelet = wavelet_recon(torch.from_numpy(kspace_data).to(torch.complex64).to("cuda"), physics, init=(torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64), torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64)))
-    """
+    lipschitz_cst = 1 / fourier_op.impl.get_lipschitz_cst(100)
+    if linear.func.__name__ == "WaveletN":
+        linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
+        linear_op.op(pinv)
+        sparse_op = sparsity(coeffs_shape=linear_op.coeffs_shape, weights=mu)
+        log.info("Setting up reconstructor")
+        fourier_op.impl.density = None
+        reconstructor = SelfCalibrationReconstructor(
+            fourier_op=fourier_op,
+            linear_op=linear_op,
+            regularizer_op=sparse_op,
+            verbose=1,
+            lipschitz_cst=lipschitz_cst,
+        )
+        log.info("Starting reconstruction")
+        recon, costs, metrics_iter = reconstructor.reconstruct(
+            kspace_data=kspace_data,
+            optimization_alg=algorithm,
+            x_init=pinv,
+            num_iterations=num_iterations,
+        )
+    else:
+        fourier_op.impl.squeeze_dims = False
+        physics = fourier_op.impl.make_deepinv_phy()
+        data_fidelity = L2()
+        params_algo = {"stepsize": 0.9 * float(1/lipschitz_cst), "lambda": mu, "a": 3}
+        if linear.func.__name__ == "WaveletPrior":
+            # Algorithm parameters
+            prior = linear(wvdim=len(fourier_op.shape))
+            iter = "FISTA"
+            iterator = optim_builder(
+                iteration=iter,
+                prior=prior,
+                data_fidelity=data_fidelity,
+                early_stop=True,
+                max_iter=num_iterations,
+                params_algo=params_algo,
+                verbose=True,
+                show_progress_bar=True,
+            )
+            recon = iterator(
+                torch.from_numpy(kspace_data).to(torch.complex64).to("cuda"),
+                physics,
+                init=(
+                    torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64),
+                    torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64)
+                ),
+            ).squeeze().cpu()
+
     data_header['costs'] = costs
     data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
@@ -406,7 +408,7 @@ store(
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/smaps": "low_frequency"},
-        {"linear": "gpu"},
+        {"linear": "deepinv_wv"},
         {"sparsity": "weighted_sparse"},
     ],
     name="recon",
