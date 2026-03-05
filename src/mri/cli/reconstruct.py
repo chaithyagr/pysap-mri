@@ -343,6 +343,8 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
             x_init=pinv,
             num_iterations=num_iterations,
         )
+        data_header['costs'] = costs
+        data_header['metrics_iter'] = metrics_iter
     else:
         fourier_op.impl.squeeze_dims = False
         physics = fourier_op.impl.make_deepinv_phy()
@@ -371,8 +373,6 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
                 ),
             ).squeeze().cpu()
 
-    data_header['costs'] = costs
-    data_header['metrics_iter'] = metrics_iter
     log.info("Saving reconstruction results")
     save_data_hydra(output_filename, recon, data_header)
     return recon
