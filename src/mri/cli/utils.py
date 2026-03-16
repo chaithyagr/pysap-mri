@@ -136,7 +136,7 @@ density_store(density_est_config, implementation="pipe", osf=1, name="pipe_lowme
 linear_store = store(group="linear")
 linear_store(wavelet_local_config, name="cpu_wv")
 linear_store(wavelet_deepinv_config, name="deepinv_wv")
-#linear_store(tv_deepinv_config, name="deepinv_tv")
+linear_store(tv_deepinv_config, name="deepinv_tv")
 
 sparsity_store = store(group="sparsity")
 sparsity_store(sparsity_config, name="weighted_sparse")

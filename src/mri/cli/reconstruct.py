@@ -322,7 +322,7 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     fourier_op, kspace_data, traj_params, data_header = additional_data
     pinv = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
     save_data_hydra("pinv_" + output_filename, pinv, data_header)
-    lipschitz_cst = 1 / fourier_op.impl.get_lipschitz_cst(100)
+    lipschitz_cst = fourier_op.impl.get_lipschitz_cst(100)
     if linear.func.__name__ == "WaveletN":
         linear_op = linear(shape=tuple(traj_params["img_size"]), dim=traj_params['dimension'])
         linear_op.op(pinv)
@@ -347,33 +347,45 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         data_header['metrics_iter'] = metrics_iter
     else:
         fourier_op.impl.squeeze_dims = False
-        physics = fourier_op.impl.make_deepinv_phy()
-        data_fidelity = L2()
-        params_algo = {"stepsize": 0.9 * float(1/lipschitz_cst), "lambda": mu, "a": 3}
+        complex_out = False
+        init = torch.from_numpy(pinv[None]).to(torch.complex64).to("cuda")
+        kspace_data = torch.from_numpy(kspace_data).to(torch.complex64).to("cuda")
         if linear.func.__name__ == "WaveletPrior":
             # Algorithm parameters
-            prior = linear(wvdim=len(fourier_op.shape))
-            iter = "FISTA"
+            physics = fourier_op.impl.make_deepinv_phy()
             iterator = optim_builder(
-                iteration=iter,
-                prior=prior,
-                data_fidelity=data_fidelity,
+                iteration="FISTA",
+                prior=linear(wvdim=len(fourier_op.shape)),
+                data_fidelity=L2(),
                 early_stop=True,
                 max_iter=num_iterations,
-                params_algo=params_algo,
+                thres_conv=1e-3,
+                params_algo={"stepsize": 0.9 * float(1/lipschitz_cst), "a": 3, "lambda": mu},
                 verbose=True,
                 show_progress_bar=True,
             )
             recon = iterator(
-                torch.from_numpy(kspace_data).to(torch.complex64).to("cuda"),
+                kspace_data,    
                 physics,
-                init=(
-                    torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64),
-                    torch.from_numpy(pinv[None]).to("cuda").to(torch.complex64)
-                ),
-            ).squeeze().cpu()
-
-    log.info("Saving reconstruction results")
+                init=(init, init),
+            )
+        elif linear.func.__name__ == "TVPrior":
+            physics = fourier_op.impl.make_deepinv_phy(viewed_as_real=True)
+            init = torch.view_as_real(init).movedim(-1, 0)
+            kspace_data = torch.view_as_real(kspace_data).movedim(-1, 0)
+            complex_out = True
+            from mri.reconstructors.pdhg_tv import PDHG_TV
+            solver_tv = PDHG_TV(
+               lambda_reg=mu,
+               max_iter=num_iterations,
+               lipschitz=lipschitz_cst,
+               data_fidelity=L2(),
+               stopping_criterion=1e-3,
+            )
+            recon = solver_tv(kspace_data, physics, init=init, compute_metrics=False)
+    if complex_out:
+        recon = torch.view_as_complex(recon.movedim(0, -1))
+    recon = recon.squeeze().cpu().numpy()
     save_data_hydra(output_filename, recon, data_header)
     return recon
 
