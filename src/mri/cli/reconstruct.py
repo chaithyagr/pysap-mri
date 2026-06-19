@@ -19,6 +19,7 @@ import numpy as np
 import pickle as pkl
 import logging, os, glob
 from functools import partial
+import scipy as sp
 
 
 log = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     if traj_file == "cart":    
         log.info("It is cartesian trajectory")
         raw_data, data_header = read_siemens_rawdat(obs_file, removeOS=True)
+        raw_data = np.sum(raw_data, axis=-1)
         mask = np.linalg.norm(raw_data, axis=0)>0
         kspace_loc = convert_mask_to_locations(mask)
         traj_params = {
@@ -164,7 +166,13 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         # Estimate the Smaps using ESPIRiT
         log.info("Estimating Smaps from ACS data using ESPIRiT")
         import cupy as cp
-        acs_data = cp.asarray(data_header['acs'], dtype=cp.complex64)
+        acs_data = data_header['acs']
+        if acs_data.shape[1] != traj_params['img_size'][0]:
+            log.warn("ACS size does not match the image size. Re-sampling")
+            acs_data = sp.signal.resample(
+                acs_data, traj_params['img_size'][0], axis=1
+            )
+        acs_data = cp.asarray(acs_data, dtype=cp.complex64)
         if coil_compress != -1:
             acs_data = (
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
