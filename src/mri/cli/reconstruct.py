@@ -178,7 +178,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
             ).reshape((-1, *data_header['acs'].shape[1:]))
             del V
-        Smaps = cartesian_espirit(acs_data, traj_params['img_size'], decim=4).get()
+        Smaps = cartesian_espirit(acs_data, tuple(traj_params['img_size']), decim=4, crop=0).get()
         fourier.keywords['smaps'] = np.ascontiguousarray(Smaps)
         del Smaps
     if isinstance(fourier.keywords['smaps'], partial):
@@ -213,7 +213,168 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     if return_data:
         log.info("Returning data")
         return dc_adjoint, (fourier_op, kspace_data, traj_params, data_header)
+
+def compute_analytical_sigma_ref_cupy(smaps, noise_cov):
+    """
+    Computes baseline R=1 noise standard deviation from coil sensitivity maps
+    using GPU acceleration with CuPy.
+
+    Parameters
+    ----------
+    smaps : ndarray or cp.ndarray
+        Coil sensitivity maps of shape (n_coils, Nz, Ny, Nx) or (64, 256, 240, 176).
+    noise_cov : ndarray or cp.ndarray
+        Coil noise covariance matrix of shape (n_coils, n_coils) or (64, 64).
+
+    Returns
+    -------
+    sigma_ref : ndarray
+        Baseline noise SD map of shape (Nz, Ny, Nx).
+    """
+    import cupy as cp
+    n_coils = noise_cov.shape[0]
+    orig_shape = smaps.shape[1:]  # (256, 240, 176)
+    n_voxels = int(np.prod(orig_shape))  # ~10.8 million voxels
+
+    # Transfer data to GPU
+    noise_cov_gpu = cp.asarray(noise_cov, dtype=cp.complex64)
+    inv_cov_gpu = cp.linalg.inv(noise_cov_gpu)
+
+    # Flatten spatial dimensions: (64, 10813440)
+    if isinstance(smaps, cp.ndarray):
+        smaps_flat = smaps.reshape(n_coils, n_voxels)
+    else:
+        smaps_flat = cp.asarray(smaps.reshape(n_coils, n_voxels), dtype=cp.complex64)
+
+    # Compute Psi_inv @ S -> (64, n_voxels)
+    # Using matrix multiplication (cp.matmul) avoids huge memory overheads of broadcast einsum
+    psi_inv_s = cp.matmul(inv_cov_gpu, smaps_flat)
+
+    # Compute S^H * (Psi_inv @ S) via element-wise dot product along coil dimension
+    sh_psi_inv_s = cp.real(cp.sum(cp.conj(smaps_flat) * psi_inv_s, axis=0))
+
+    # Free memory immediately
+    del smaps_flat, psi_inv_s
+    cp.get_default_memory_pool().free_all_blocks()
+
+    # Avoid division by zero
+    eps = 1e-10
+    sh_psi_inv_s = cp.maximum(sh_psi_inv_s, eps)
+
+    # Analytical R=1 noise SD
+    sigma_ref_gpu = 1.0 / cp.sqrt(sh_psi_inv_s)
+    sigma_ref = sigma_ref_gpu.reshape(orig_shape)
+
+    # Return as NumPy array on CPU
+    return cp.asnumpy(sigma_ref)
+
+def generate_complex_noise_cholesky(L, n_samples):
+    n_coils = L.shape[0]
     
+    
+    # 2. Standard complex Gaussian noise ~ CN(0, I)
+    z = (np.random.randn(n_coils, n_samples) + 1j * np.random.randn(n_coils, n_samples)) / np.sqrt(2)
+    
+    # 3. Correlate channels
+    return L @ z
+
+def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress: str|int, 
+          debug: int, obs_reader, traj_reader, fourier, output_filename: str = "recon.nii", grappa_recon=None):
+    """Reconstructs an MRI image using the given parameters.
+
+    Parameters
+    ----------
+    obs_file : str
+        Path to the file containing the observed k-space data.
+    traj_file : str
+        Path to the file containing the trajectory data.
+    num_iterations : int
+        Number of iterations for the reconstruction algorithm.
+    coil_compress : str | int
+        Method or factor for coil compression.
+    algorithm : str
+        Optimization algorithm to use for reconstruction.
+    debug : int
+        Debug level for printing debug information.
+    obs_reader : callable
+        Object for reading the observed k-space data.
+    traj_reader : callable
+        Object for reading the trajectory data.
+    fourier : callable
+        Object representing the Fourier operator.
+    linear : callable
+        Object representing the linear operator.
+    sparsity : callable
+        Object representing the sparsity operator.
+    output_filename : str, optional
+        Path to save the reconstructed image, by default "recon.pkl"
+    remove_dc_for_recon: bool, optional
+        Whether to remove the density compensation for reconstruction, by default True
+        Note that it will still be used to estimate x_init
+    validation_recon: np.ndarray, optional
+        The validation reconstruction to compare the results with, by default None
+    metrics: dict, optional
+        List of metrics to evaluate the reconstruction, by default None
+    """
+    recon_adjoint, additional_data = dc_adjoint(
+        obs_file,
+        traj_file,
+        coil_compress,
+        debug,
+        obs_reader,
+        traj_reader,
+        fourier,
+        grappa_recon=grappa_recon,
+        output_filename='dc_adj_' + output_filename,
+        return_data=True,
+    )
+    fourier_op, kspace_data, _, data_header = additional_data
+    noise_cov = np.cov(data_header['noise'].reshape(data_header['n_coils'], -1))
+    L = np.linalg.cholesky(noise_cov)
+    n_coils, n_samples = kspace_data.shape
+    replica_stack = []
+    # Accumulators (stored in complex64 / float32)
+    mean = None
+    M2_real = None
+    M2_imag = None
+    for i in range(num_iterations):
+        complex_noise = generate_complex_noise_cholesky(L, n_samples)
+        noisy_kspace = kspace_data + complex_noise
+        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=30).astype(np.complex64)
+        rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    
+        
+        # 3. Initialize accumulators
+        if mean is None:
+            mean = np.zeros_like(rec_k, dtype=np.complex64)
+            M2_real = np.zeros(rec_k.shape, dtype=np.float32)
+            M2_imag = np.zeros(rec_k.shape, dtype=np.float32)
+
+        # 4. Complex Welford Update
+        delta = rec_k - mean
+        mean += delta / k
+        delta2 = rec_k - mean
+
+        # Accumulate real and imaginary variances independently
+        M2_real += np.real(delta) * np.real(delta2)
+        M2_imag += np.imag(delta) * np.imag(delta2)
+
+    # Compute unbiased sample variance (N - 1)
+    var_real = M2_real / (num_replicas - 1)
+    var_imag = M2_imag / (num_replicas - 1)
+
+    recon = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
+    recon_final = recon.cpu().numpy()
+    # Total noise standard deviation: sqrt(var_real + var_imag)
+    sigma_acc = np.sqrt(var_real + var_imag)
+    snr_map = np.abs(recon_final) / sigma_acc
+    sigma_ref = compute_analytical_sigma_ref_cupy(fourier_op.impl.smaps, noise_cov)
+    gmap = sigma_acc / (sigma_ref)#* np.sqrt(acceleration_factor))
+
+    log.info("Saving reconstruction results")
+    save_data_hydra('pinv_' + output_filename, recon_final, data_header)
+    save_data_hydra('gmap_' + output_filename, gmap, data_header)
+    save_data_hydra('snr_' + output_filename, snr_map, data_header)
+    return recon
     
     
 def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: int, coil_compress: str|int, 
@@ -467,6 +628,21 @@ store(
     ],
     name="pnp_recon",
 )
+store(
+    gmap_recon,
+    obs_reader=raw_config,
+    traj_reader=traj_config,
+    coil_compress=-1,
+    debug=0,
+    hydra_defaults=[
+        "_self_",
+        {"fourier": "gpu"},
+        {"fourier/density_comp": "pipe"},
+        {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
+        {"fourier/smaps": "low_frequency"},
+    ],
+    name="gmap_recon",
+)
 
 # Setup the Hydra Config and callbacks.
 store.add_to_hydra_store()
@@ -478,7 +654,14 @@ def run_recon():
         config_path=None,
         version_base="1.3",
     )
-    
+
+def run_gmap_recon():
+    zen(gmap_recon).hydra_main(
+        config_name="recon",
+        config_path=None,
+        version_base="1.3",
+    )
+
 def run_pnp_recon():
     zen(pnp_recon).hydra_main(
         config_name="pnp_recon",

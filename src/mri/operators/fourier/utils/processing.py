@@ -18,7 +18,7 @@ import numpy as np
 import scipy.fftpack as pfft
 from scipy.interpolate import griddata, RegularGridInterpolator
 
-from mrinufft import get_density
+from mrinufft.density import get_density
 
 
 def convert_mask_to_locations(mask):

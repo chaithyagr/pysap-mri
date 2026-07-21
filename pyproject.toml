@@ -36,6 +36,7 @@ recon = "mri.cli.reconstruct:run_recon"
 dc_adjoint = "mri.cli.reconstruct:run_adjoint"
 retro_recon = "mri.cli.retro_recon:run_retro_recon"
 pnp_recon = "mri.cli.reconstruct:run_pnp_recon"
+gmap_recon = "mri.cli.reconstruct:run_gmap_recon"
 
 [project.urls]
 Homepage = "https://github.com/CEA-COSMIC/pysap-mri"
