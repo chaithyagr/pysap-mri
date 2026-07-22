@@ -12,6 +12,7 @@ from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_A
 from deepinv.optim.data_fidelity import L2
 from deepinv.optim.optimizers import optim_builder
 import torch
+import tqdm
     
     
 import json
@@ -316,6 +317,8 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     metrics: dict, optional
         List of metrics to evaluate the reconstruction, by default None
     """
+    log.info("Running G-Factor map :: ")
+    print(get_outdir_path())
     recon_adjoint, additional_data = dc_adjoint(
         obs_file,
         traj_file,
@@ -337,12 +340,12 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     mean = None
     M2_real = None
     M2_imag = None
-    for i in range(num_iterations):
+    for i in tqdm.trange(num_iterations):
         complex_noise = generate_complex_noise_cholesky(L, n_samples)
         noisy_kspace = kspace_data + complex_noise
         rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=30).astype(np.complex64)
         rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    
-        
+        save_data_hydra(str(i) + "_" + output_filename, abs(rec_k), data_header)
         # 3. Initialize accumulators
         if mean is None:
             mean = np.zeros_like(rec_k, dtype=np.complex64)
@@ -351,7 +354,7 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
 
         # 4. Complex Welford Update
         delta = rec_k - mean
-        mean += delta / k
+        mean += delta / (i+1)
         delta2 = rec_k - mean
 
         # Accumulate real and imaginary variances independently
@@ -359,8 +362,8 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
         M2_imag += np.imag(delta) * np.imag(delta2)
 
     # Compute unbiased sample variance (N - 1)
-    var_real = M2_real / (num_replicas - 1)
-    var_imag = M2_imag / (num_replicas - 1)
+    var_real = M2_real / (num_iterations - 1)
+    var_imag = M2_imag / (num_itertaions - 1)
 
     recon = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
     recon_final = recon.cpu().numpy()
@@ -657,7 +660,7 @@ def run_recon():
 
 def run_gmap_recon():
     zen(gmap_recon).hydra_main(
-        config_name="recon",
+        config_name="gmap_recon",
         config_path=None,
         version_base="1.3",
     )
