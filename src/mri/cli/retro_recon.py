@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_compress: str|int, 
-          algorithm: str, debug: int, traj_reader, fourier, forward, linear, sparsity,
+          algorithm: str, debug: int, traj_reader, fourier, forward, linear, 
           noise_cov: str = None, output_filename: str = "recon.nii"):
     """Perform retrospective reconstruction on MRI data.
     This function takes MRI data and performs retrospective reconstruction using the specified parameters.
@@ -41,36 +41,38 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         Forward operator function.
     linear : callable
         Linear operator function.
-    sparsity : callable
-        Sparsity operator function.
     output_filename : str, optional
         Output filename for the reconstructed data, by default "recon.pkl".
     """
-    image = nib.load(obs_file).get_fdata(dtype=np.complex64)
+    if obs_file.lower().endswith((".dat")):
+        cart_data, header = read_siemens_rawdat(obs_file)
+        image = ifft(cart_data).astype(np.complex64)
+        noise_cov = np.cov(header['noise'].reshape(header['n_coils'], -1))
+        NOISE_REF_DWELL_TIME_MS = 5e-3
+    else:
+        image = nib.load(obs_file).get_fdata(dtype=np.complex64)
+    
+        # Add noise
+        if noise_cov is not None:
+            log.info("Adding noise to the k-space data")
+            noise_cov = np.load(noise_cov)
+            
+            
+        kspace_data += np.moveaxis(noise.astype(np.complex64), -1, 0)
+
     shots, traj_params = traj_reader(
         traj_file,
         dwell_time='min_osf',
     )
+    
     shots = np.clip(shots, -0.5, 0.5)
     kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
     forward_op = forward(kspace_loc, traj_params["img_size"], n_coils=image.shape[0])
     kspace_data = forward_op.op(image)
+    noise = generate_complex_noise_cholesky(kspace_data.shape[1], noise_cov=noise_cov)
     
-    # Add noise
-    if noise_cov is not None:
-        log.info("Adding noise to the k-space data")
-        noise_cov_matrix = np.load(noise_cov)
-        # FIXME: Remove this, this is temporary
-        noise_cov_matrix = noise_cov_matrix[:kspace_data.shape[0], :kspace_data.shape[0]]
-        noise_args = {
-            "mean": np.zeros(image.shape[0]),
-            "cov": noise_cov_matrix*traj_params['min_osf'],
-            "size": kspace_data.shape[1:],
-            "check_valid": "warn",
-        }
-        noise = np.random.multivariate_normal(**noise_args) + 1j*np.random.multivariate_normal(**noise_args)
-        kspace_data += np.moveaxis(noise.astype(np.complex64), -1, 0)
-    
+    kspace_data += noise
+
     data_header = {
         "n_coils": image.shape[0],
         "shifts": [0, 0, 0],
@@ -93,7 +95,7 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         traj_reader=traj_reader,
         fourier=fourier,
         linear=linear,
-        sparsity=sparsity,
+        sparsity=None,
         output_filename=output_filename,
         validation_recon=np.linalg.norm(image, axis=0),
         metrics={
@@ -115,8 +117,7 @@ store(
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe_lowmem"},
         {"fourier/smaps": "low_frequency"},
-        {"linear": "gpu"},
-        {"sparsity": "weighted_sparse"},
+        {"linear": "deepinv_TV"},
     ],
     name="retro_recon",
 )
@@ -131,4 +132,3 @@ def run_retro_recon():
         config_path=None,
         version_base="1.3",
     )
-

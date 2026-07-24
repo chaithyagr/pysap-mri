@@ -3,7 +3,7 @@ from hydra_zen import store, zen
 from mri.io.output import save_data
 from mrinufft.io import read_siemens_rawdat
 from mri.operators import FFT
-from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path
+from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path, generate_complex_noise_cholesky
 from mri.operators.fourier.utils import discard_frequency_outliers, convert_mask_to_locations
 from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
 from mrinufft.extras.smaps import cartesian_espirit, coil_compression
@@ -269,15 +269,7 @@ def compute_analytical_sigma_ref_cupy(smaps, noise_cov):
     # Return as NumPy array on CPU
     return cp.asnumpy(sigma_ref)
 
-def generate_complex_noise_cholesky(L, n_samples):
-    n_coils = L.shape[0]
-    
-    
-    # 2. Standard complex Gaussian noise ~ CN(0, I)
-    z = (np.random.randn(n_coils, n_samples) + 1j * np.random.randn(n_coils, n_samples)) / np.sqrt(2)
-    
-    # 3. Correlate channels
-    return L @ z
+
 
 def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress: str|int, 
           debug: int, obs_reader, traj_reader, fourier, output_filename: str = "recon.nii", grappa_recon=None):
@@ -344,7 +336,7 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     M2_real = None
     M2_imag = None
     for i in tqdm.trange(num_iterations):
-        complex_noise = generate_complex_noise_cholesky(L, n_samples)
+        complex_noise = generate_complex_noise_cholesky(n_samples, L=L)
         noisy_kspace = kspace_data + complex_noise
         rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=100).astype(np.complex64)
         rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    

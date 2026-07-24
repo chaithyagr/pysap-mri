@@ -207,3 +207,12 @@ def get_outdir_path(filename=''):
     if filename != '':
         out = os.path.join(out, filename)
     return out
+
+def generate_complex_noise_cholesky(n_samples, noise_cov=None, L=None):
+    if L is None:
+        L = np.linalg.cholesky(noise_cov)
+    n_coils = L.shape[0]
+    # 2. Standard complex Gaussian noise ~ CN(0, I)
+    z = (np.random.randn(n_coils, n_samples) + 1j * np.random.randn(n_coils, n_samples)) / np.sqrt(2)
+    # 3. Correlate channels
+    return L @ z
