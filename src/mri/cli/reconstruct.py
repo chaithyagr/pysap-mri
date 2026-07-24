@@ -336,6 +336,9 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     L = np.linalg.cholesky(noise_cov)
     n_coils, n_samples = kspace_data.shape
     replica_stack = []
+    recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=100).astype(np.complex64)
+    save_data_hydra('pinv_' + output_filename[:-4] + '.pkl', recon_final, data_header)
+    # Total noise standard deviation: sqrt(var_real + var_imag)
     # Accumulators (stored in complex64 / float32)
     mean = None
     M2_real = None
@@ -343,9 +346,9 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     for i in tqdm.trange(num_iterations):
         complex_noise = generate_complex_noise_cholesky(L, n_samples)
         noisy_kspace = kspace_data + complex_noise
-        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=30).astype(np.complex64)
+        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=100).astype(np.complex64)
         rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    
-        save_data_hydra(str(i) + "_" + output_filename, abs(rec_k), data_header)
+        save_data_hydra(str(i) + "_" + output_filename[:-4] + '.pkl', abs(rec_k), data_header)
         # 3. Initialize accumulators
         if mean is None:
             mean = np.zeros_like(rec_k, dtype=np.complex64)
@@ -364,17 +367,14 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     # Compute unbiased sample variance (N - 1)
     var_real = M2_real / (num_iterations - 1)
     var_imag = M2_imag / (num_iterations - 1)
-    recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
-    # Total noise standard deviation: sqrt(var_real + var_imag)
     sigma_acc = np.sqrt(var_real + var_imag)
     snr_map = np.abs(recon_final) / sigma_acc
     sigma_ref = compute_analytical_sigma_ref_cupy(fourier_op.impl.smaps, noise_cov)
     gmap = sigma_acc / (sigma_ref)#* np.sqrt(acceleration_factor))
 
     log.info("Saving reconstruction results")
-    save_data_hydra('pinv_' + output_filename, recon_final, data_header)
-    save_data_hydra('gmap_' + output_filename, gmap, data_header)
-    save_data_hydra('snr_' + output_filename, snr_map, data_header)
+    save_data_hydra('gmap_' + output_filename[:-4] + '.pkl', gmap, data_header)
+    save_data_hydra('snr_' + output_filename[:-4] + '.pkl', snr_map, data_header)
     return recon
     
     
