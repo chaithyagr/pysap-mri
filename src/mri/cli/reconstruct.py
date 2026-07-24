@@ -363,10 +363,8 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
 
     # Compute unbiased sample variance (N - 1)
     var_real = M2_real / (num_iterations - 1)
-    var_imag = M2_imag / (num_itertaions - 1)
-
-    recon = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
-    recon_final = recon.cpu().numpy()
+    var_imag = M2_imag / (num_iterations - 1)
+    recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
     # Total noise standard deviation: sqrt(var_real + var_imag)
     sigma_acc = np.sqrt(var_real + var_imag)
     snr_map = np.abs(recon_final) / sigma_acc
