@@ -1,11 +1,13 @@
 from hydra_zen import store, zen
 import numpy as np
 
-from mri.cli.utils import traj_config, fourier_op_config
+from mri.cli.utils import traj_retro_config, fourier_op_config, generate_complex_noise_cholesky, save_data_hydra
 from mri.operators.fourier.utils import discard_frequency_outliers
 import nibabel as nib
 import logging, os
 from mri.cli.reconstruct import recon
+from mrinufft.io import read_siemens_rawdat
+from mrinufft.extras.cartesian import ifft, fft
 from mri.optimizers.utils.metrics import box_psnr, box_ssim
 
 log = logging.getLogger(__name__)
@@ -44,46 +46,46 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     output_filename : str, optional
         Output filename for the reconstructed data, by default "recon.pkl".
     """
+    shots, traj_params = traj_reader(traj_file)
+    dwell_time_acquired = 0.01/traj_params['min_osf'] if traj_reader.keywords['dwell_time'] == 'min_osf' else traj_reader.keywords['dwell_time']
+    obs_time = dwell_time_acquired * shots.shape[1]
+    shots = np.clip(shots, -0.5, 0.5)
     if obs_file.lower().endswith((".dat")):
-        cart_data, header = read_siemens_rawdat(obs_file)
+        cart_data, header = read_siemens_rawdat(obs_file, removeOS=True)
         image = ifft(cart_data).astype(np.complex64)
         noise_cov = np.cov(header['noise'].reshape(header['n_coils'], -1))
         NOISE_REF_DWELL_TIME_MS = 5e-3
+        # Calculate time spent per Nyquist voxel
+        time_per_nyquist_voxel_cartesian =  obs_time / traj_params['img_size'][0] 
+        noise_factor = NOISE_REF_DWELL_TIME_MS * ( 1/ dwell_time_acquired - 1 / time_per_nyquist_voxel_cartesian)
+        noise_cov *= noise_factor
     else:
         image = nib.load(obs_file).get_fdata(dtype=np.complex64)
-    
-        # Add noise
+        cart_data = fft(image)
         if noise_cov is not None:
             log.info("Adding noise to the k-space data")
             noise_cov = np.load(noise_cov)
-            
-            
-        kspace_data += np.moveaxis(noise.astype(np.complex64), -1, 0)
-
-    shots, traj_params = traj_reader(
-        traj_file,
-        dwell_time='min_osf',
-    )
-    
-    shots = np.clip(shots, -0.5, 0.5)
+    mid_point = np.asarray(cart_data.shape[-2:]) // 2
+    acs = cart_data[:, :, mid_point[0]-12:mid_point[0]+12, mid_point[1]-12:mid_point[1]+12]
     kspace_loc = shots.reshape(-1, traj_params["dimension"]).astype(np.float32)
     forward_op = forward(kspace_loc, traj_params["img_size"], n_coils=image.shape[0])
-    kspace_data = forward_op.op(image)
+    # Dont normalize, to ensure energy is preserved. This is important for noise addition and SNR calculations.
+    kspace_data = forward_op.op(image) * np.sqrt(2**len(traj_params["img_size"])) 
     noise = generate_complex_noise_cholesky(kspace_data.shape[1], noise_cov=noise_cov)
-    
     kspace_data += noise
 
     data_header = {
         "n_coils": image.shape[0],
         "shifts": [0, 0, 0],
         "type": "retro_recon",
-        "n_adc_samples": shots.shape[1]*traj_params['min_osf'],
+        "n_adc_samples": shots.shape[1],
         "n_slices": 1,
         "n_contrasts": 1,
-        "oversampling_factor": traj_params['min_osf'],
+        "oversampling_factor": int(np.around(0.01 / dwell_time_acquired)),
         "trajectory_name": os.path.basename(traj_file),
+        "acs": acs,
     }
-    recon(
+    recon_image, smaps = recon(
         obs_file="",
         traj_file=traj_file,
         mu=mu,
@@ -103,10 +105,12 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
             "ssim": box_ssim,
         }
     )
+    gt = np.sum(np.conj(smaps) * image, axis=0)
+    save_data_hydra(output_filename, gt, data_header)
 
 store(
     retro,
-    traj_reader=traj_config,
+    traj_reader=traj_retro_config,
     algorithm="pogm",
     num_iterations=30,
     forward=fourier_op_config,
@@ -117,7 +121,7 @@ store(
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe_lowmem"},
         {"fourier/smaps": "low_frequency"},
-        {"linear": "deepinv_TV"},
+        {"linear": "deepinv_tv"},
     ],
     name="retro_recon",
 )

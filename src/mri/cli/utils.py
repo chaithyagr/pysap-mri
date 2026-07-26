@@ -11,7 +11,9 @@ from mrinufft.extras.smaps import get_smaps
 from mri.operators import NonCartesianFFT, WeightedSparseThreshold
 from modopt.opt.linear import Identity
 import os
+from mri.io.output import save_data
 from deepinv.optim.prior import WaveletPrior, TVPrior
+save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args, **kwargs)
 
 
 try:
@@ -51,6 +53,12 @@ traj_config = builds(
     zen_exclude=["dwell_time"],
     zen_partial=True,
 )
+traj_retro_config = builds(
+    read_trajectory,
+    populate_full_signature=True,
+    zen_partial=True,
+)
+
 
 density_est_config = builds(
     estimate_density_compensation,
@@ -209,6 +217,7 @@ def get_outdir_path(filename=''):
     return out
 
 def generate_complex_noise_cholesky(n_samples, noise_cov=None, L=None):
+    import numpy as np
     if L is None:
         L = np.linalg.cholesky(noise_cov)
     n_coils = L.shape[0]

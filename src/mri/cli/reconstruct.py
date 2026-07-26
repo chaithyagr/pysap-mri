@@ -1,14 +1,14 @@
 from hydra_zen import store, zen
 
-from mri.io.output import save_data
 from mrinufft.io import read_siemens_rawdat
 from mri.operators import FFT
-from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path, generate_complex_noise_cholesky
+from mri.cli.utils import raw_config, traj_config, setup_hydra_config, get_outdir_path, generate_complex_noise_cholesky, save_data_hydra
 from mri.operators.fourier.utils import discard_frequency_outliers, convert_mask_to_locations
 from mrinufft.io.utils import add_phase_to_kspace_with_shifts, remove_extra_kspace_samples
 from mrinufft.extras.smaps import cartesian_espirit, coil_compression
 from mri.reconstructors import SelfCalibrationReconstructor
 from mri.reconstructors.ggrappa import do_grappa_and_append_data, GRAPPA_RECON_AVAILABLE
+from mrinufft.operators.autodiff import image_as_real, image_as_cpx, kspace_as_real
 from deepinv.optim.data_fidelity import L2
 from deepinv.optim.optimizers import optim_builder
 import torch
@@ -25,7 +25,6 @@ import scipy as sp
 
 log = logging.getLogger(__name__)
 
-save_data_hydra = lambda x, *args, **kwargs: save_data(get_outdir_path(x), *args, **kwargs)
 
 
 def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int, debug: int,
@@ -510,8 +509,8 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     else:
         fourier_op.impl.squeeze_dims = False
         complex_out = False
-        init = torch.from_numpy(pinv[None]).to(torch.complex64).to("cuda")
-        kspace_data = torch.from_numpy(kspace_data).to(torch.complex64).to("cuda")
+        init = image_as_real(torch.from_numpy(pinv[None, None]).to("cuda")).to(torch.float32)
+        kspace_data = kspace_as_real(torch.from_numpy(kspace_data[None, None]).to("cuda")).to(torch.float32)
         if linear.func.__name__ == "WaveletPrior":
             # Algorithm parameters
             physics = fourier_op.impl.make_deepinv_phy()
@@ -533,8 +532,6 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
             )
         elif linear.func.__name__ == "TVPrior":
             physics = fourier_op.impl.make_deepinv_phy(viewed_as_real=True)
-            init = torch.view_as_real(init).movedim(-1, 0)
-            kspace_data = torch.view_as_real(kspace_data).movedim(-1, 0)
             complex_out = True
             from mri.reconstructors.pdhg_tv import PDHG_TV
             solver_tv = PDHG_TV(
@@ -546,10 +543,9 @@ def recon(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
             )
             recon = solver_tv(kspace_data, physics, init=init, compute_metrics=False)
     if complex_out:
-        recon = torch.view_as_complex(recon.movedim(0, -1))
-    recon = recon.squeeze().cpu().numpy()
+        recon = image_as_cpx(recon.cpu()).numpy().squeeze()
     save_data_hydra(output_filename, recon, data_header)
-    return recon
+    return recon, fourier_op.impl.smaps
 
 setup_hydra_config()
 store(
