@@ -111,6 +111,9 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     )
     gt = np.sum(np.conj(smaps) * image, axis=0)
     save_data_hydra("gt_" + output_filename, gt, data_header)
+    box_psnr_val = box_psnr(recon_image, gt)
+    box_ssim_val = box_ssim(recon_image, gt)
+    log.info(f"Box PSNR: {box_psnr_val:.2f} dB, Box SSIM: {box_ssim_val:.4f}")
 
 store(
     retro,
