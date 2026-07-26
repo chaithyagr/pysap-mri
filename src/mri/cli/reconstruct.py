@@ -361,7 +361,7 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     sigma_acc = np.sqrt(var_real + var_imag)
     snr_map = np.abs(recon_final) / sigma_acc
     sigma_ref = compute_analytical_sigma_ref_cupy(fourier_op.impl.smaps, noise_cov)
-    gmap = sigma_acc / (sigma_ref)#* np.sqrt(acceleration_factor))
+    gmap = sigma_acc / (sigma_ref)
 
     log.info("Saving reconstruction results")
     save_data_hydra('gmap_' + output_filename[:-4] + '.pkl', gmap, data_header)
