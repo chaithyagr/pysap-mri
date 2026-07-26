@@ -53,6 +53,7 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
     if obs_file.lower().endswith((".dat")):
         cart_data, header = read_siemens_rawdat(obs_file, removeOS=True)
         image = ifft(cart_data).astype(np.complex64)
+        affine = header['affine']
         noise_cov = np.cov(header['noise'].reshape(header['n_coils'], -1))
         NOISE_REF_DWELL_TIME_MS = 5e-3
         # Calculate time spent per Nyquist voxel
@@ -60,7 +61,9 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         noise_factor = NOISE_REF_DWELL_TIME_MS * ( 1/ dwell_time_acquired - 1 / time_per_nyquist_voxel_cartesian)
         noise_cov *= noise_factor
     else:
-        image = nib.load(obs_file).get_fdata(dtype=np.complex64)
+        nifty = nib.load(obs_file)
+        affine = nifty.affine
+        image = nifty.get_fdata(dtype=np.complex64)
         cart_data = fft(image)
         if noise_cov is not None:
             log.info("Adding noise to the k-space data")
@@ -84,6 +87,7 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         "oversampling_factor": int(np.around(0.01 / dwell_time_acquired)),
         "trajectory_name": os.path.basename(traj_file),
         "acs": acs,
+        "affine": affine,
     }
     recon_image, smaps = recon(
         obs_file="",
@@ -106,7 +110,7 @@ def retro(obs_file: str, traj_file: str, mu: float, num_iterations: int, coil_co
         }
     )
     gt = np.sum(np.conj(smaps) * image, axis=0)
-    save_data_hydra(output_filename, gt, data_header)
+    save_data_hydra("gt_" + output_filename, gt, data_header)
 
 store(
     retro,
