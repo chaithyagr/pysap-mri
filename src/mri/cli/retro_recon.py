@@ -121,7 +121,7 @@ store(
     algorithm="pogm",
     num_iterations=30,
     forward=fourier_op_config,
-    coil_compress=5,
+    coil_compress=-1,
     debug=1,
     hydra_defaults=[
         "_self_",

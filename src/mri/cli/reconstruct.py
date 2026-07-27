@@ -72,7 +72,6 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
     if traj_file == "cart":    
         log.info("It is cartesian trajectory")
         raw_data, data_header = read_siemens_rawdat(obs_file, removeOS=True)
-        raw_data = np.sum(raw_data, axis=-1)
         mask = np.linalg.norm(raw_data, axis=0)>0
         kspace_loc = convert_mask_to_locations(mask)
         traj_params = {
