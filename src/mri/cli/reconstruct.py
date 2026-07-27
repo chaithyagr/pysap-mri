@@ -166,7 +166,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         log.info("Estimating Smaps from ACS data using ESPIRiT")
         import cupy as cp
         acs_data = data_header['acs']
-mmit         if acs_data.shape[1] != traj_params['img_size'][0] and traj_file != "cart":
+        if acs_data.shape[1] != traj_params['img_size'][0] and traj_file != "cart":
             log.warn("ACS size does not match the image size. Re-sampling")
             acs_data = sp.signal.resample(
                 acs_data, traj_params['img_size'][0], axis=1
