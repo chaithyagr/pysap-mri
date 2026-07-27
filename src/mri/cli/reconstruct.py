@@ -269,7 +269,7 @@ def compute_analytical_sigma_ref_cupy(smaps, noise_cov):
 
 
 
-def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress: str|int, 
+def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, run_id: int, coil_compress: str|int, 
           debug: int, obs_reader, traj_reader, fourier, output_filename: str = "recon.nii", grappa_recon=None):
     """Reconstructs an MRI image using the given parameters.
 
@@ -325,47 +325,16 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, coil_compress
     noise_cov = np.cov(data_header['noise'].reshape(data_header['n_coils'], -1))
     L = np.linalg.cholesky(noise_cov)
     n_coils, n_samples = kspace_data.shape
-    replica_stack = []
-    recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=100).astype(np.complex64)
-    save_data_hydra('pinv_' + output_filename[:-4] + '.pkl', recon_final, data_header)
-    # Total noise standard deviation: sqrt(var_real + var_imag)
-    # Accumulators (stored in complex64 / float32)
-    mean = None
-    M2_real = None
-    M2_imag = None
-    for i in tqdm.trange(num_iterations):
+    if run_id == 0:
+        recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
+        save_data_hydra('pinv_' + output_filename[:-4] + '.pkl', recon_final, data_header)
+    for i in range(num_iterations):
         complex_noise = generate_complex_noise_cholesky(n_samples, L=L)
         noisy_kspace = kspace_data + complex_noise
-        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=100).astype(np.complex64)
+        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=30).astype(np.complex64)
         rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    
-        save_data_hydra(str(i) + "_" + output_filename[:-4] + '.pkl', abs(rec_k), data_header)
-        # 3. Initialize accumulators
-        if mean is None:
-            mean = np.zeros_like(rec_k, dtype=np.complex64)
-            M2_real = np.zeros(rec_k.shape, dtype=np.float32)
-            M2_imag = np.zeros(rec_k.shape, dtype=np.float32)
-
-        # 4. Complex Welford Update
-        delta = rec_k - mean
-        mean += delta / (i+1)
-        delta2 = rec_k - mean
-
-        # Accumulate real and imaginary variances independently
-        M2_real += np.real(delta) * np.real(delta2)
-        M2_imag += np.imag(delta) * np.imag(delta2)
-
-    # Compute unbiased sample variance (N - 1)
-    var_real = M2_real / (num_iterations - 1)
-    var_imag = M2_imag / (num_iterations - 1)
-    sigma_acc = np.sqrt(var_real + var_imag)
-    snr_map = np.abs(recon_final) / sigma_acc
-    sigma_ref = compute_analytical_sigma_ref_cupy(fourier_op.impl.smaps, noise_cov)
-    gmap = sigma_acc / (sigma_ref)
-
-    log.info("Saving reconstruction results")
-    save_data_hydra('gmap_' + output_filename[:-4] + '.pkl', gmap, data_header)
-    save_data_hydra('snr_' + output_filename[:-4] + '.pkl', snr_map, data_header)
-    return recon
+        save_data_hydra(str(run_id) + "_" + str(i) + "_" + output_filename[:-4] + '.pkl', rec_k, data_header)
+    return 
     
     
 def pnp_recon(obs_file: str, traj_file: str, weights_file: str, num_iterations: int, coil_compress: str|int, 
@@ -621,6 +590,8 @@ store(
     obs_reader=raw_config,
     traj_reader=traj_config,
     coil_compress=-1,
+    run_id=0,
+    num_iterations=10,
     debug=0,
     hydra_defaults=[
         "_self_",
