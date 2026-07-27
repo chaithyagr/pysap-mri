@@ -166,7 +166,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
         log.info("Estimating Smaps from ACS data using ESPIRiT")
         import cupy as cp
         acs_data = data_header['acs']
-        if acs_data.shape[1] != traj_params['img_size'][0]:
+mmit         if acs_data.shape[1] != traj_params['img_size'][0] and traj_file != "cart":
             log.warn("ACS size does not match the image size. Re-sampling")
             acs_data = sp.signal.resample(
                 acs_data, traj_params['img_size'][0], axis=1
@@ -177,7 +177,7 @@ def dc_adjoint(obs_file: str|np.ndarray, traj_file: str, coil_compress: str|int,
                 cp.asarray(V, dtype=cp.complex64) @ acs_data.reshape(data_header['acs'].shape[0], -1)
             ).reshape((-1, *data_header['acs'].shape[1:]))
             del V
-        Smaps = cartesian_espirit(acs_data, tuple(traj_params['img_size']), decim=4, crop=0).get()
+        Smaps = cartesian_espirit(acs_data, tuple(traj_params['img_size']), decim=4).get()
         fourier.keywords['smaps'] = np.ascontiguousarray(Smaps)
         del Smaps
     if isinstance(fourier.keywords['smaps'], partial):
@@ -596,7 +596,7 @@ store(
         {"fourier": "gpu_lowmem"},
         {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
         {"fourier/density_comp": "pipe_lowmem"},
-        {"fourier/smaps": "low_frequency"},
+        {"fourier/smaps": "espirit"},
     ],
     name="recon_lowmem",
 )
@@ -611,7 +611,7 @@ store(
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
-        {"fourier/smaps": "low_frequency"},
+        {"fourier/smaps": "espirit"},
         {"pnp": "gpu"}
     ],
     name="pnp_recon",
@@ -627,7 +627,7 @@ store(
         {"fourier": "gpu"},
         {"fourier/density_comp": "pipe"},
         {"grappa_recon": "enable"} if GRAPPA_RECON_AVAILABLE else {},
-        {"fourier/smaps": "low_frequency"},
+        {"fourier/smaps": "espirit"},
     ],
     name="gmap_recon",
 )

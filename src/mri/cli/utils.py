@@ -74,6 +74,11 @@ smaps_config = builds(
     zen_exclude=["density"],
     zen_partial=True,
 )
+smaps_espirit_config = builds(
+    get_smaps("espirit"),
+    populate_full_signature=True,
+    zen_partial=True,
+)
 fourier_op_config = builds(
     NonCartesianFFT,
     populate_full_signature=True,
@@ -137,6 +142,7 @@ fourier_store(
 )
 smaps_store = store(group="fourier/smaps")
 smaps_store(smaps_config, name="low_frequency")
+smaps_store(smaps_espirit_config, name="espirit")
 density_store = store(group="fourier/density_comp")
 density_store(density_est_config, implementation="pipe", name="pipe")
 density_store(density_est_config, implementation="pipe", osf=1, name="pipe_lowmem")
