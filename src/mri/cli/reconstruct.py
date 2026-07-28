@@ -326,12 +326,16 @@ def gmap_recon(obs_file: str, traj_file: str, num_iterations: int, run_id: int, 
     L = np.linalg.cholesky(noise_cov)
     n_coils, n_samples = kspace_data.shape
     if run_id == 0:
-        recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=30).astype(np.complex64)
+        recon_final = fourier_op.impl.pinv_solver(kspace_data, max_iter=10).astype(np.complex64)
         save_data_hydra('pinv_' + output_filename[:-4] + '.pkl', recon_final, data_header)
+        fully_sampled = generate_complex_noise_cholesky(np.prod(recon_final.shape), L=L).reshape(L.shape[0], *recon_final.shape)
+        noise_recon = np.sum(np.conj(fourier_op.impl.smaps) * ifft(fully_sampled).astype(np.complex64), axis=0)
+        save_data_hydra('noise_' + output_filename[:-4] + '.pkl', noise_recon, data_header)
+
     for i in range(num_iterations):
         complex_noise = generate_complex_noise_cholesky(n_samples, L=L)
         noisy_kspace = kspace_data + complex_noise
-        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=30).astype(np.complex64)
+        rec_rep = fourier_op.impl.pinv_solver(noisy_kspace, max_iter=10).astype(np.complex64)
         rec_k = rec_rep.cpu().numpy() if hasattr(rec_rep, 'cpu') else rec_rep    
         save_data_hydra(str(run_id) + "_" + str(i) + "_" + output_filename[:-4] + '.pkl', rec_k, data_header)
     return 
